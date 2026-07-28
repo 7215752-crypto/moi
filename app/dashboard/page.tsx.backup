@@ -1,0 +1,349 @@
+import Link from "next/link";
+import { SiteHeader } from "@/components/site-header";
+import { StatusBadge } from "@/components/status-badge";
+import { GoogleScheduleCard } from "@/components/google-schedule-card";
+import { requireUser } from "@/lib/auth";
+import {
+  formatDate,
+  formatMoney,
+  formatShortDate,
+} from "@/lib/format";
+
+type PayrollPeriod = {
+  id: string;
+  date_from: string;
+  date_to: string;
+  payment_due_date: string;
+  status: string;
+};
+
+type PayrollLine = {
+  amount: number | string;
+};
+
+type PayrollRun = {
+  payroll_period_id: string;
+  version: number;
+  status: string;
+  payroll_lines: PayrollLine[] | null;
+};
+
+type MiscItem = {
+  payroll_period_id: string;
+  amount: number | string;
+};
+
+export default async function DashboardPage() {
+  const { supabase, profile } =
+    await requireUser();
+
+  const [
+    periodsResult,
+    runsResult,
+    miscResult,
+  ] = await Promise.all([
+    supabase
+      .from("payroll_periods")
+      .select(
+        "id, date_from, date_to, payment_due_date, status",
+      )
+      .order("date_from", {
+        ascending: false,
+      }),
+
+    supabase
+      .from("payroll_runs")
+      .select(
+        "payroll_period_id, version, status, payroll_lines(amount)",
+      )
+      .order("version", {
+        ascending: false,
+      }),
+
+    supabase
+      .from("payroll_misc_items")
+      .select(
+        "payroll_period_id, amount",
+      ),
+  ]);
+
+  if (periodsResult.error) {
+    throw new Error(
+      `Не удалось загрузить периоды: ${periodsResult.error.message}`,
+    );
+  }
+
+  const periods =
+    (periodsResult.data ??
+      []) as PayrollPeriod[];
+
+  const runs =
+    (runsResult.data ??
+      []) as unknown as PayrollRun[];
+
+  const miscItems =
+    (miscResult.data ??
+      []) as MiscItem[];
+
+  const latestVersionByPeriod =
+    new Map<string, number>();
+
+  for (const run of runs) {
+    const current =
+      latestVersionByPeriod.get(
+        run.payroll_period_id,
+      ) ?? 0;
+
+    if (run.version > current) {
+      latestVersionByPeriod.set(
+        run.payroll_period_id,
+        run.version,
+      );
+    }
+  }
+
+  const totalsByPeriod =
+    new Map<string, number>();
+
+  for (const run of runs) {
+    if (
+      run.version !==
+      latestVersionByPeriod.get(
+        run.payroll_period_id,
+      )
+    ) {
+      continue;
+    }
+
+    const runTotal = (
+      run.payroll_lines ?? []
+    ).reduce(
+      (sum, line) =>
+        sum + Number(line.amount ?? 0),
+      0,
+    );
+
+    totalsByPeriod.set(
+      run.payroll_period_id,
+      (totalsByPeriod.get(
+        run.payroll_period_id,
+      ) ?? 0) + runTotal,
+    );
+  }
+
+  for (const item of miscItems) {
+    totalsByPeriod.set(
+      item.payroll_period_id,
+      (totalsByPeriod.get(
+        item.payroll_period_id,
+      ) ?? 0) +
+        Number(item.amount ?? 0),
+    );
+  }
+
+  const currentPeriod = periods[0];
+
+  const totalPayroll = Array.from(
+    totalsByPeriod.values(),
+  ).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
+
+  const today = new Date();
+
+  const canImportSchedule = [
+    "owner",
+    "accountant",
+  ].includes(profile.role);
+
+  return (
+    <div className="app-shell">
+      <SiteHeader profile={profile} />
+
+      <main className="page-container">
+        <section className="hero-row">
+          <div>
+            <p className="eyebrow">
+              Расчёт зарплаты
+            </p>
+
+            <h1>Расчётные периоды</h1>
+
+            <p className="muted wide">
+              Выберите период, чтобы увидеть
+              зарплату по ресторанам и подробную
+              расшифровку каждого начисления.
+            </p>
+          </div>
+
+          <div className="hero-date">
+            <span>Сегодня</span>
+
+            <strong>
+              {new Intl.DateTimeFormat(
+                "ru-RU",
+                {
+                  day: "2-digit",
+                  month: "long",
+                  year: "numeric",
+                },
+              ).format(today)}
+            </strong>
+          </div>
+        </section>
+
+        <section className="metric-grid">
+          <article className="metric-card accent">
+            <span>Периодов в базе</span>
+
+            <strong>{periods.length}</strong>
+
+            <small>
+              История расчётов сохраняется
+              по версиям
+            </small>
+          </article>
+
+          <article className="metric-card">
+            <span>Последний период</span>
+
+            <strong className="metric-date">
+              {currentPeriod
+                ? `${formatShortDate(
+                    currentPeriod.date_from,
+                  )} — ${formatShortDate(
+                    currentPeriod.date_to,
+                  )}`
+                : "Нет данных"}
+            </strong>
+
+            <small>
+              {currentPeriod
+                ? `Выплата до ${formatShortDate(
+                    currentPeriod.payment_due_date,
+                  )}`
+                : "Создайте расчётный период"}
+            </small>
+          </article>
+
+          <article className="metric-card">
+            <span>
+              Сумма загруженных расчётов
+            </span>
+
+            <strong className="metric-money">
+              {formatMoney(totalPayroll)}
+            </strong>
+
+            <small>
+              С учётом прочих расходов
+              по периодам
+            </small>
+          </article>
+        </section>
+
+        {canImportSchedule && (
+          <GoogleScheduleCard
+            initialYear={today.getFullYear()}
+            initialMonth={
+              today.getMonth() + 1
+            }
+          />
+        )}
+
+        <section className="content-card">
+          <div className="section-heading">
+            <div>
+              <h2>Все периоды</h2>
+
+              <p>
+                Текущие и закрытые расчёты
+                сотрудников.
+              </p>
+            </div>
+          </div>
+
+          {periods.length === 0 ? (
+            <div className="empty-state">
+              Расчётные периоды пока
+              не созданы.
+            </div>
+          ) : (
+            <div className="period-list">
+              {periods.map((period) => (
+                <Link
+                  href={`/payroll/${period.id}`}
+                  key={period.id}
+                  className="period-row"
+                >
+                  <div className="period-icon">
+                    <span>
+                      {new Date(
+                        `${period.date_from}T00:00:00`,
+                      ).getDate()}
+                    </span>
+
+                    <small>
+                      {new Intl.DateTimeFormat(
+                        "ru-RU",
+                        {
+                          month: "short",
+                        },
+                      )
+                        .format(
+                          new Date(
+                            `${period.date_from}T00:00:00`,
+                          ),
+                        )
+                        .replace(".", "")}
+                    </small>
+                  </div>
+
+                  <div className="period-main">
+                    <strong>
+                      {formatDate(
+                        period.date_from,
+                      )}{" "}
+                      —{" "}
+                      {formatDate(
+                        period.date_to,
+                      )}
+                    </strong>
+
+                    <span>
+                      Выплата до{" "}
+                      {formatDate(
+                        period.payment_due_date,
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="period-total">
+                    <span>К выплате</span>
+
+                    <strong>
+                      {formatMoney(
+                        totalsByPeriod.get(
+                          period.id,
+                        ) ?? 0,
+                      )}
+                    </strong>
+                  </div>
+
+                  <StatusBadge
+                    status={period.status}
+                  />
+
+                  <span className="row-arrow">
+                    →
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+      </main>
+    </div>
+  );
+}
