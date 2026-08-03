@@ -18,7 +18,7 @@ export async function getIikoAccessToken(): Promise<string> {
   const response = await fetch(`${IIKO_API_BASE}/access_token`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ appId, clientSecret }),
+    body: JSON.stringify({ appId, apiKey: clientSecret }),
     cache: "no-store",
   });
 
