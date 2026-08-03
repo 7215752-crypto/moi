@@ -314,6 +314,50 @@ export default async function DashboardPage() {
               </button>
             </div>
           </article>
+
+          {["owner", "accountant"].includes(profile.role) && (
+            <article
+              className="portal-section-card"
+              id="import"
+            >
+              <div className="portal-card-top">
+                <span className="portal-card-number">
+                  ⚙️
+                </span>
+
+                <span className="portal-status">
+                  Админ
+                </span>
+              </div>
+
+              <div className="portal-card-body">
+                <h2>Импорт данных</h2>
+
+                <p>
+                  Загрузка графика смен и ставок
+                  из Google-таблиц для расчёта
+                  зарплаты сотрудников.
+                </p>
+
+                <ul className="portal-card-points">
+                  <li>График смен из Google</li>
+                  <li>Ставки сотрудников</li>
+                  <li>Проверка сопоставления</li>
+                </ul>
+              </div>
+
+              <div className="portal-card-footer">
+                <Link
+                  href="/admin/import"
+                  className="portal-link has-tooltip"
+                  data-tooltip="Только для владельца и бухгалтера."
+                  title="Открыть импорт данных"
+                >
+                  Открыть импорт
+                </Link>
+              </div>
+            </article>
+          )}
         </section>
 
         <section
