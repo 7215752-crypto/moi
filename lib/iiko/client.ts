@@ -8,17 +8,18 @@ type IikoTokenResponse = {
 export async function getIikoAccessToken(): Promise<string> {
   const appId = process.env.IIKO_API_APP_ID;
   const clientSecret = process.env.IIKO_API_CLIENT_SECRET;
+  const apiKey = process.env.IIKO_API_KEY;
 
-  if (!appId || !clientSecret) {
+  if (!appId || !clientSecret || !apiKey) {
     throw new Error(
-      "В Vercel не настроены переменные IIKO_API_APP_ID / IIKO_API_CLIENT_SECRET.",
+      "В Vercel не настроены переменные IIKO_API_APP_ID / IIKO_API_CLIENT_SECRET / IIKO_API_KEY.",
     );
   }
 
   const response = await fetch(`${IIKO_API_BASE}/access_token`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ appId, apiKey: clientSecret, clientSecret }),
+    body: JSON.stringify({ appId, apiKey, clientSecret }),
     cache: "no-store",
   });
 
