@@ -40,9 +40,11 @@ export default async function LeaderShiftsPage({ searchParams }: Props) {
       .limit(1)
       .maybeSingle();
     if (!latest) redirect("/dashboard");
-    periodId = latest.id;
+    periodId = latest.id as string;
     periodLabel = `${formatDate(latest.date_from)} — ${formatDate(latest.date_to)}`;
   }
+
+  if (!periodId) redirect("/dashboard");
 
   return (
     <div className="app-shell">

@@ -53,7 +53,7 @@ type ShiftDay = {
   factOut: string | null;
   factHours: number;
   lateMinutes: number | null;
-  status: "ok" | "late" | "missed" | "extra";
+  status: "ok" | "late" | "missed" | "extra" | "other_unit";
 };
 
 // В базе моменты времени хранятся в UTC — показываем в московском поясе,
@@ -85,6 +85,7 @@ function minutesOf(clock: string): number {
 function buildShiftDays(
   planned: PlannedShift[],
   attendance: AttendanceDay[],
+  otherUnitDates: Set<string>,
 ): ShiftDay[] {
   const plannedByDate = new Map<string, PlannedShift>();
   for (const shift of planned) {
@@ -113,7 +114,8 @@ function buildShiftDays(
     }
 
     let status: ShiftDay["status"] = "ok";
-    if (plan && !fact) status = "missed";
+    if (plan && !fact)
+      status = otherUnitDates.has(date) ? "other_unit" : "missed";
     else if (!plan && fact) status = "extra";
     else if ((lateMinutes ?? 0) > 0) status = "late";
 
@@ -186,7 +188,7 @@ export default async function EmployeePayrollPage({ params, searchParams }: Prop
     throw new Error(`Не удалось загрузить расшифровку: ${linesError.message}`);
   }
 
-  const [plannedResult, attendanceResult] = await Promise.all([
+  const [plannedResult, attendanceResult, otherUnitsResult] = await Promise.all([
     supabase
       .from("planned_shifts")
       .select("shift_date, planned_start, planned_end, is_shift_leader")
@@ -202,11 +204,23 @@ export default async function EmployeePayrollPage({ params, searchParams }: Prop
       .eq("employee_id", employeeId)
       .eq("business_unit_id", unitId)
       .order("work_date"),
+    // Явки в других ресторанах: «неявка» здесь может быть работой там.
+    supabase
+      .from("attendance_records")
+      .select("work_date")
+      .eq("payroll_period_id", periodId)
+      .eq("employee_id", employeeId)
+      .neq("business_unit_id", unitId),
   ]);
+
+  const otherUnitDates = new Set(
+    (otherUnitsResult.data ?? []).map((row) => row.work_date as string),
+  );
 
   const shiftDays = buildShiftDays(
     (plannedResult.data ?? []) as PlannedShift[],
     (attendanceResult.data ?? []) as AttendanceDay[],
+    otherUnitDates,
   );
   const lateDays = shiftDays.filter((day) => (day.lateMinutes ?? 0) > 0);
   const lateTotalMinutes = lateDays.reduce(
@@ -403,6 +417,11 @@ export default async function EmployeePayrollPage({ params, searchParams }: Prop
                         <td>
                           {day.status === "missed" && (
                             <span className="shift-status missed">неявка</span>
+                          )}
+                          {day.status === "other_unit" && (
+                            <span className="shift-status extra">
+                              работал в другом ресторане
+                            </span>
                           )}
                           {day.status === "extra" && (
                             <span className="shift-status extra">
