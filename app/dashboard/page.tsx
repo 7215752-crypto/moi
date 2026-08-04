@@ -22,6 +22,7 @@ type PayrollLine = {
 
 type PayrollRun = {
   payroll_period_id: string;
+  business_unit_id: string | null;
   version: number;
   payroll_lines: PayrollLine[] | null;
 };
@@ -52,7 +53,7 @@ export default async function DashboardPage() {
     supabase
       .from("payroll_runs")
       .select(
-        "payroll_period_id, version, payroll_lines(amount)",
+        "payroll_period_id, business_unit_id, version, payroll_lines(amount)",
       )
       .order("version", {
         ascending: false,
@@ -83,18 +84,23 @@ export default async function DashboardPage() {
     (miscResult.data ??
       []) as MiscItem[];
 
-  const latestVersionByPeriod =
+  // Версии считаются на период × ресторан: берём последний расчёт каждого
+  // ресторана, иначе рестораны с меньшим номером версии выпадут из итога.
+  const latestVersionByPeriodUnit =
     new Map<string, number>();
+
+  const runKey = (run: PayrollRun) =>
+    `${run.payroll_period_id}|${run.business_unit_id ?? "none"}`;
 
   for (const run of runs) {
     const currentVersion =
-      latestVersionByPeriod.get(
-        run.payroll_period_id,
+      latestVersionByPeriodUnit.get(
+        runKey(run),
       ) ?? 0;
 
     if (run.version > currentVersion) {
-      latestVersionByPeriod.set(
-        run.payroll_period_id,
+      latestVersionByPeriodUnit.set(
+        runKey(run),
         run.version,
       );
     }
@@ -106,8 +112,8 @@ export default async function DashboardPage() {
   for (const run of runs) {
     if (
       run.version !==
-      latestVersionByPeriod.get(
-        run.payroll_period_id,
+      latestVersionByPeriodUnit.get(
+        runKey(run),
       )
     ) {
       continue;

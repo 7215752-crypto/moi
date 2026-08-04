@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { StatusBadge } from "@/components/status-badge";
+import { PayoutCheckbox } from "@/components/payout-checkbox";
+import { RecalcButton } from "@/components/recalc-button";
 import { requireUser } from "@/lib/auth";
 import { formatDate, formatMoney } from "@/lib/format";
 
@@ -18,20 +20,109 @@ type Period = {
   status: string;
 };
 
-type TotalRow = {
-  employee_id: string;
-  full_name: string;
+type Payout = {
   business_unit_id: string;
-  business_unit_name: string;
-  total_amount: number | string;
+  employee_id: string;
+  amount_paid: number | string;
+  paid_by_name: string | null;
+  paid_at: string;
+};
+
+type Rate = {
+  employee_id: string;
+  business_unit_id: string | null;
+  rate_type: "hourly" | "shift" | "monthly";
+  amount: number | string;
+  valid_from: string;
+  valid_to: string | null;
+};
+
+type EmployeeRow = {
+  employeeId: string;
+  name: string;
+  hours: number;
+  components: Record<string, number>;
+  total: number;
+  payout: Payout | null;
+  rateLabel: string | null;
+  hasRate: boolean;
 };
 
 type UnitGroup = {
   id: string;
   name: string;
-  rows: TotalRow[];
+  version: number | null;
+  rows: EmployeeRow[];
+  columnTotals: Record<string, number>;
+  hoursTotal: number;
   total: number;
+  paidCount: number;
+  paidSum: number;
+  remaining: number;
 };
+
+// Колонки — как в Google-файле «ЗП»: каждой колонке соответствуют типы строк расчёта.
+const COMPONENT_COLUMNS: Array<{ key: string; label: string; types: string[] }> = [
+  { key: "base", label: "По ставке", types: ["hourly_pay", "shift_pay", "monthly_pay"] },
+  { key: "motivation", label: "% от продаж", types: ["iiko_motivation"] },
+  { key: "fixed", label: "Фикс блюда", types: ["iiko_fixed_bonus"] },
+  { key: "service", label: "Сервисный", types: ["service_charge"] },
+  { key: "bonus", label: "Премии", types: ["tg_bonus"] },
+  { key: "fine", label: "Штрафы", types: ["fine"] },
+  { key: "purchase", label: "Покупки", types: ["purchase"] },
+  { key: "inventory", label: "Официалка", types: ["official_inventory"] },
+  { key: "leader", label: "Шифт-лидер", types: ["leader_kpi"] },
+];
+
+const KNOWN_TYPES = new Set(COMPONENT_COLUMNS.flatMap((column) => column.types));
+
+function columnKeyFor(componentType: string): string {
+  for (const column of COMPONENT_COLUMNS) {
+    if (column.types.includes(componentType)) return column.key;
+  }
+  return "other";
+}
+
+function formatHours(value: number): string {
+  return value.toLocaleString("ru-RU", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
+function rateLabelFor(
+  rates: Rate[],
+  employeeId: string,
+  businessUnitId: string,
+): { label: string | null; hasRate: boolean } {
+  const candidates = rates
+    .filter(
+      (rate) =>
+        rate.employee_id === employeeId &&
+        (rate.business_unit_id === null ||
+          rate.business_unit_id === businessUnitId),
+    )
+    .sort((a, b) => {
+      const aSpecific = a.business_unit_id ? 0 : 1;
+      const bSpecific = b.business_unit_id ? 0 : 1;
+      if (aSpecific !== bSpecific) return aSpecific - bSpecific;
+      return a.valid_from < b.valid_from ? 1 : -1;
+    });
+
+  const rate = candidates[0];
+  if (!rate) return { label: null, hasRate: false };
+
+  const amount = Number(rate.amount).toLocaleString("ru-RU", {
+    maximumFractionDigits: 0,
+  });
+  const suffix =
+    rate.rate_type === "hourly"
+      ? "₽/ч"
+      : rate.rate_type === "shift"
+        ? "₽/смена"
+        : "₽/мес";
+  return { label: `${amount} ${suffix}`, hasRate: true };
+}
 
 export default async function PayrollPeriodPage({ params, searchParams }: Props) {
   const { periodId } = await params;
@@ -47,74 +138,214 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
   if (periodError || !periodData) notFound();
   const period = periodData as Period;
 
-  const { data: latestRun } = await supabase
-    .from("payroll_runs")
-    .select("version")
-    .eq("payroll_period_id", periodId)
-    .order("version", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const [
+    runsResult,
+    attendanceResult,
+    payoutsResult,
+    unitsResult,
+    employeesResult,
+    ratesResult,
+    miscResult,
+  ] = await Promise.all([
+    supabase
+      .from("payroll_runs")
+      .select("id, business_unit_id, version")
+      .eq("payroll_period_id", periodId),
+    supabase
+      .from("attendance_records")
+      .select("employee_id, business_unit_id, hours")
+      .eq("payroll_period_id", periodId),
+    supabase
+      .from("payroll_payouts")
+      .select("business_unit_id, employee_id, amount_paid, paid_by_name, paid_at")
+      .eq("payroll_period_id", periodId),
+    supabase.from("business_units").select("id, name"),
+    supabase.from("employees").select("id, full_name"),
+    supabase
+      .from("employee_rates")
+      .select("employee_id, business_unit_id, rate_type, amount, valid_from, valid_to")
+      .lte("valid_from", period.date_to)
+      .or(`valid_to.is.null,valid_to.gte.${period.date_from}`),
+    supabase
+      .from("payroll_misc_items")
+      .select("business_unit_id, amount, description")
+      .eq("payroll_period_id", periodId),
+  ]);
 
-  const version = latestRun?.version ?? null;
-  const totalsResult = version
+  // Версия расчёта — последняя по каждому ресторану (а не по периоду в целом).
+  const latestRunByUnit = new Map<string, { id: string; version: number }>();
+  for (const run of runsResult.data ?? []) {
+    if (!run.business_unit_id) continue;
+    const existing = latestRunByUnit.get(run.business_unit_id);
+    if (!existing || run.version > existing.version) {
+      latestRunByUnit.set(run.business_unit_id, {
+        id: run.id,
+        version: run.version,
+      });
+    }
+  }
+
+  const runIds = Array.from(latestRunByUnit.values()).map((run) => run.id);
+  const unitByRunId = new Map<string, string>();
+  for (const [unitId, run] of latestRunByUnit.entries()) {
+    unitByRunId.set(run.id, unitId);
+  }
+
+  const linesResult = runIds.length
     ? await supabase
-        .from("payroll_employee_totals")
-        .select(
-          "employee_id, full_name, business_unit_id, business_unit_name, total_amount",
-        )
-        .eq("payroll_period_id", periodId)
-        .eq("version", version)
-        .order("business_unit_name")
-        .order("full_name")
+        .from("payroll_lines")
+        .select("payroll_run_id, employee_id, component_type, amount")
+        .in("payroll_run_id", runIds)
     : { data: [], error: null };
 
-  if (totalsResult.error) {
-    throw new Error(`Не удалось загрузить расчёт: ${totalsResult.error.message}`);
+  if (linesResult.error) {
+    throw new Error(`Не удалось загрузить расчёт: ${linesResult.error.message}`);
   }
 
-  const allRows = (totalsResult.data ?? []) as TotalRow[];
+  const unitNameById = new Map<string, string>(
+    (unitsResult.data ?? []).map((unit) => [unit.id, unit.name]),
+  );
+  const employeeNameById = new Map<string, string>(
+    (employeesResult.data ?? []).map((employee) => [employee.id, employee.full_name]),
+  );
+  const rates = (ratesResult.data ?? []) as Rate[];
+  const payouts = (payoutsResult.data ?? []) as Payout[];
+  const payoutByKey = new Map<string, Payout>(
+    payouts.map((payout) => [
+      `${payout.business_unit_id}|${payout.employee_id}`,
+      payout,
+    ]),
+  );
+
+  // Сборка строк: сотрудник × ресторан. Сначала суммы расчёта, затем часы из явок —
+  // сотрудники с часами, но без начислений тоже попадают в таблицу (светофор «нет ставки»).
+  const rowsByUnit = new Map<string, Map<string, EmployeeRow>>();
+  let hasOtherColumn = false;
+
+  const ensureRow = (unitId: string, employeeId: string): EmployeeRow => {
+    let unitRows = rowsByUnit.get(unitId);
+    if (!unitRows) {
+      unitRows = new Map();
+      rowsByUnit.set(unitId, unitRows);
+    }
+    let row = unitRows.get(employeeId);
+    if (!row) {
+      const { label, hasRate } = rateLabelFor(rates, employeeId, unitId);
+      row = {
+        employeeId,
+        name: employeeNameById.get(employeeId) ?? "Без имени",
+        hours: 0,
+        components: {},
+        total: 0,
+        payout: payoutByKey.get(`${unitId}|${employeeId}`) ?? null,
+        rateLabel: label,
+        hasRate,
+      };
+      unitRows.set(employeeId, row);
+    }
+    return row;
+  };
+
+  for (const line of linesResult.data ?? []) {
+    const unitId = unitByRunId.get(line.payroll_run_id);
+    if (!unitId) continue;
+    const row = ensureRow(unitId, line.employee_id);
+    const amount = Number(line.amount ?? 0);
+    const key = columnKeyFor(line.component_type);
+    if (!KNOWN_TYPES.has(line.component_type)) hasOtherColumn = true;
+    row.components[key] = (row.components[key] ?? 0) + amount;
+    row.total += amount;
+  }
+
+  for (const record of attendanceResult.data ?? []) {
+    const row = ensureRow(record.business_unit_id, record.employee_id);
+    row.hours += Number(record.hours ?? 0);
+  }
+
+  const columns = hasOtherColumn
+    ? [...COMPONENT_COLUMNS, { key: "other", label: "Прочее", types: [] }]
+    : COMPONENT_COLUMNS;
+
+  const allGroups: UnitGroup[] = Array.from(rowsByUnit.entries())
+    .map(([unitId, unitRows]) => {
+      const rows = Array.from(unitRows.values()).sort((a, b) =>
+        a.name.localeCompare(b.name, "ru"),
+      );
+      const columnTotals: Record<string, number> = {};
+      let hoursTotal = 0;
+      let total = 0;
+      let paidCount = 0;
+      let paidSum = 0;
+      let remaining = 0;
+
+      for (const row of rows) {
+        hoursTotal += row.hours;
+        total += row.total;
+        for (const column of columns) {
+          columnTotals[column.key] =
+            (columnTotals[column.key] ?? 0) + (row.components[column.key] ?? 0);
+        }
+        if (row.payout) {
+          paidCount += 1;
+          paidSum += Number(row.payout.amount_paid);
+        } else if (row.total > 0) {
+          remaining += row.total;
+        }
+      }
+
+      return {
+        id: unitId,
+        name: unitNameById.get(unitId) ?? "Ресторан",
+        version: latestRunByUnit.get(unitId)?.version ?? null,
+        rows,
+        columnTotals,
+        hoursTotal,
+        total,
+        paidCount,
+        paidSum,
+        remaining,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, "ru"));
+
   const selectedUnit = query.unit ?? "all";
-  const visibleRows =
+  const groups =
     selectedUnit === "all"
-      ? allRows
-      : allRows.filter((row) => row.business_unit_id === selectedUnit);
+      ? allGroups
+      : allGroups.filter((group) => group.id === selectedUnit);
 
-  const groupsMap = new Map<string, UnitGroup>();
-  for (const row of visibleRows) {
-    const existing = groupsMap.get(row.business_unit_id) ?? {
-      id: row.business_unit_id,
-      name: row.business_unit_name,
-      rows: [],
-      total: 0,
-    };
-    existing.rows.push(row);
-    existing.total += Number(row.total_amount ?? 0);
-    groupsMap.set(row.business_unit_id, existing);
-  }
-  const groups = Array.from(groupsMap.values());
-  const units = Array.from(
-    new Map(
-      allRows.map((row) => [
-        row.business_unit_id,
-        { id: row.business_unit_id, name: row.business_unit_name },
-      ]),
-    ).values(),
-  );
-
-  const { data: miscRows } = await supabase
-    .from("payroll_misc_items")
-    .select("business_unit_id, amount, description")
-    .eq("payroll_period_id", periodId);
-
-  const miscTotal = (miscRows ?? []).reduce(
-    (sum, row) => sum + Number(row.amount ?? 0),
+  const employeeTotal = allGroups.reduce((sum, group) => sum + group.total, 0);
+  const paidTotal = allGroups.reduce((sum, group) => sum + group.paidSum, 0);
+  const paidPeople = allGroups.reduce((sum, group) => sum + group.paidCount, 0);
+  const totalPeople = allGroups.reduce(
+    (sum, group) => sum + group.rows.length,
     0,
   );
-  const employeeTotal = allRows.reduce(
-    (sum, row) => sum + Number(row.total_amount ?? 0),
+  const remainingTotal = allGroups.reduce(
+    (sum, group) => sum + group.remaining,
     0,
   );
-  const negativeRows = allRows.filter((row) => Number(row.total_amount) < 0).length;
+
+  const problems: string[] = [];
+  const negativeRows = allGroups
+    .flatMap((group) => group.rows)
+    .filter((row) => row.total < 0).length;
+  const noRateRows = allGroups
+    .flatMap((group) => group.rows)
+    .filter((row) => row.hours > 0 && !row.hasRate).length;
+  const diffRows = allGroups
+    .flatMap((group) => group.rows)
+    .filter(
+      (row) =>
+        row.payout &&
+        Math.round((row.total - Number(row.payout.amount_paid)) * 100) !== 0,
+    ).length;
+  if (negativeRows > 0) problems.push(`отрицательных итогов: ${negativeRows}`);
+  if (noRateRows > 0) problems.push(`часы без ставки: ${noRateRows}`);
+  if (diffRows > 0) problems.push(`расчёт изменился после выплаты: ${diffRows}`);
+
+  const miscRows = miscResult.data ?? [];
+  const canRecalc = ["owner", "accountant", "manager"].includes(profile.role);
 
   return (
     <div className="app-shell">
@@ -135,41 +366,40 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
               <StatusBadge status={period.status} />
             </div>
             <p className="muted wide">
-              {formatDate(period.date_from)} — {formatDate(period.date_to)} · версия
-              расчёта {version ?? "не создана"}
+              {formatDate(period.date_from)} — {formatDate(period.date_to)} ·
+              выплата до {formatDate(period.payment_due_date)}
             </p>
           </div>
-          <div className="hero-date">
-            <span>Дата выплаты</span>
-            <strong>{formatDate(period.payment_due_date)}</strong>
-          </div>
+          {canRecalc && (
+            <RecalcButton from={period.date_from} to={period.date_to} />
+          )}
         </section>
 
         <section className="metric-grid four">
           <article className="metric-card accent">
             <span>Начислено сотрудникам</span>
             <strong className="metric-money">{formatMoney(employeeTotal)}</strong>
-            <small>{allRows.length} строк по ресторанам</small>
+            <small>{totalPeople} сотрудников по ресторанам</small>
           </article>
           <article className="metric-card">
-            <span>Прочие расходы</span>
-            <strong className="metric-money">{formatMoney(miscTotal)}</strong>
-            <small>Расходы без привязки к сотруднику</small>
+            <span>Выплачено</span>
+            <strong className="metric-money">{formatMoney(paidTotal)}</strong>
+            <small>
+              {paidPeople} из {totalPeople} с отметкой «выплачено»
+            </small>
           </article>
           <article className="metric-card">
-            <span>Итого периода</span>
-            <strong className="metric-money">
-              {formatMoney(employeeTotal + miscTotal)}
-            </strong>
-            <small>Сотрудники и прочие расходы</small>
+            <span>Осталось выдать</span>
+            <strong className="metric-money">{formatMoney(remainingTotal)}</strong>
+            <small>Строки без отметки «выплачено»</small>
           </article>
           <article className="metric-card">
             <span>Контроль</span>
-            <strong>{negativeRows === 0 ? "Без ошибок" : negativeRows}</strong>
+            <strong>{problems.length === 0 ? "Без ошибок" : "Внимание"}</strong>
             <small>
-              {negativeRows === 0
-                ? "Нет отрицательных итоговых зарплат"
-                : "Отрицательных итогов требуют проверки"}
+              {problems.length === 0
+                ? "Нет отрицательных сумм и часов без ставки"
+                : problems.join(" · ")}
             </small>
           </article>
         </section>
@@ -177,16 +407,19 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
         <section className="content-card">
           <div className="section-heading responsive">
             <div>
-              <h2>Сотрудники</h2>
-              <p>Нажмите на сотрудника, чтобы открыть расшифровку.</p>
+              <h2>Расчёт по ресторанам</h2>
+              <p>
+                Колонки — как в файле ЗП. Нажмите на сотрудника, чтобы открыть
+                расшифровку и смены.
+              </p>
             </div>
             <form className="filter-form" method="get">
               <label htmlFor="unit">Ресторан</label>
               <select id="unit" name="unit" defaultValue={selectedUnit}>
                 <option value="all">Все рестораны</option>
-                {units.map((unit) => (
-                  <option key={unit.id} value={unit.id}>
-                    {unit.name}
+                {allGroups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
                   </option>
                 ))}
               </select>
@@ -197,7 +430,10 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
           </div>
 
           {groups.length === 0 ? (
-            <div className="empty-state">В выбранном периоде нет расчёта.</div>
+            <div className="empty-state">
+              В этом периоде пока нет данных. Нажмите «Рассчитать зарплату»,
+              чтобы забрать явки из iiko.
+            </div>
           ) : (
             <div className="unit-groups">
               {groups.map((group) => (
@@ -205,41 +441,108 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
                   <div className="unit-heading">
                     <div>
                       <h3>{group.name}</h3>
-                      <span>{group.rows.length} строк</span>
+                      <span>
+                        версия {group.version ?? "—"} · выплачено{" "}
+                        {group.paidCount} из {group.rows.length}
+                        {group.remaining > 0 &&
+                          ` · осталось ${formatMoney(group.remaining)}`}
+                      </span>
                     </div>
                     <strong>{formatMoney(group.total)}</strong>
                   </div>
-                  <div className="payroll-table-wrap">
-                    <table className="payroll-table">
+                  <div className="payroll-table-wrap scrollable">
+                    <table className="payroll-table pivot">
                       <thead>
                         <tr>
                           <th>Сотрудник</th>
-                          <th>Ресторан</th>
-                          <th className="numeric">К начислению</th>
-                          <th aria-label="Открыть" />
+                          <th className="numeric">Часы</th>
+                          {columns.map((column) => (
+                            <th className="numeric" key={column.key}>
+                              {column.label}
+                            </th>
+                          ))}
+                          <th className="numeric">К выдаче</th>
+                          <th>Выплата</th>
                         </tr>
                       </thead>
                       <tbody>
                         {group.rows.map((row) => (
-                          <tr key={`${row.employee_id}-${row.business_unit_id}`}>
+                          <tr
+                            key={row.employeeId}
+                            className={row.total < 0 ? "problem-row" : undefined}
+                          >
                             <td>
-                              <strong>{row.full_name}</strong>
+                              {group.version ? (
+                                <Link
+                                  className="employee-link"
+                                  href={`/payroll/${periodId}/employee/${row.employeeId}?unit=${group.id}&version=${group.version}`}
+                                >
+                                  <strong>{row.name}</strong>
+                                </Link>
+                              ) : (
+                                <strong>{row.name}</strong>
+                              )}
+                              <small className="rate-hint">
+                                {row.rateLabel ??
+                                  (row.hours > 0 ? "нет ставки" : "—")}
+                              </small>
                             </td>
-                            <td>{row.business_unit_name}</td>
-                            <td className="numeric money-cell">
-                              {formatMoney(row.total_amount)}
+                            <td className="numeric">
+                              {row.hours > 0 ? formatHours(row.hours) : "—"}
                             </td>
-                            <td className="open-cell">
-                              <Link
-                                aria-label={`Открыть расчёт ${row.full_name}`}
-                                href={`/payroll/${periodId}/employee/${row.employee_id}?unit=${row.business_unit_id}&version=${version}`}
-                              >
-                                →
-                              </Link>
+                            {columns.map((column) => {
+                              const value = row.components[column.key] ?? 0;
+                              const isBase = column.key === "base";
+                              return (
+                                <td className="numeric" key={column.key}>
+                                  {value !== 0 ? (
+                                    formatMoney(value)
+                                  ) : isBase && row.hours > 0 && !row.hasRate ? (
+                                    <span className="warn-badge">нет ставки</span>
+                                  ) : (
+                                    <span className="dim">—</span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                            <td
+                              className={`numeric money-cell ${row.total < 0 ? "negative-money" : ""}`}
+                            >
+                              {formatMoney(row.total)}
+                            </td>
+                            <td className="payout-cell">
+                              <PayoutCheckbox
+                                periodId={periodId}
+                                businessUnitId={group.id}
+                                employeeId={row.employeeId}
+                                employeeName={row.name}
+                                currentAmount={row.total}
+                                payout={row.payout}
+                                role={profile.role}
+                              />
                             </td>
                           </tr>
                         ))}
                       </tbody>
+                      <tfoot>
+                        <tr>
+                          <td>Итого</td>
+                          <td className="numeric">
+                            {formatHours(group.hoursTotal)}
+                          </td>
+                          {columns.map((column) => (
+                            <td className="numeric" key={column.key}>
+                              {(group.columnTotals[column.key] ?? 0) !== 0
+                                ? formatMoney(group.columnTotals[column.key])
+                                : "—"}
+                            </td>
+                          ))}
+                          <td className="numeric money-cell">
+                            {formatMoney(group.total)}
+                          </td>
+                          <td />
+                        </tr>
+                      </tfoot>
                     </table>
                   </div>
                 </section>
@@ -248,7 +551,7 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
           )}
         </section>
 
-        {(miscRows ?? []).length > 0 ? (
+        {miscRows.length > 0 ? (
           <section className="content-card slim">
             <div className="section-heading">
               <div>
@@ -257,7 +560,7 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
               </div>
             </div>
             <div className="misc-list">
-              {(miscRows ?? []).map((row, index) => (
+              {miscRows.map((row, index) => (
                 <div key={`${row.description}-${index}`}>
                   <span>{row.description}</span>
                   <strong>{formatMoney(row.amount)}</strong>

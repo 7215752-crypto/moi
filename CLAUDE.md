@@ -30,17 +30,21 @@ Next.js 16 (App Router, RSC, middleware в `proxy.ts`), React 19, TypeScript str
 
 ## База данных (Supabase, проект qxskwitgffjtudnaxczv)
 
-Схема живёт в Supabase, в репозитории SQL пока нет. Основные таблицы: `business_units` (рестораны), `departments`, `employees`, `employee_aliases`, `user_profiles` (роли: owner/accountant/manager/employee), `payroll_periods`, `payroll_runs` (версия на период × ресторан), `payroll_lines` (component_type см. `humanizeComponent`), `payroll_misc_items`, view `payroll_employee_totals` (security_invoker), `planned_shifts`, `leader_shifts`.
+Схема живёт в Supabase; новые изменения схемы — только миграциями (apply_migration + дубль файла в `supabase/migrations/`). Основные таблицы: `business_units` (рестораны), `departments`, `employees`, `employee_aliases`, `employee_assignments`, `employee_rates` (ставки hourly/shift/monthly с valid_from/to), `user_profiles` (роли: owner/accountant/manager/employee), `payroll_periods`, `payroll_runs` (версия на период × ресторан), `payroll_lines` (component_type см. `humanizeComponent`), `payroll_misc_items`, `payroll_payouts` (отметки «выплачено»: период × ресторан × сотрудник, unique — защита от двойной выплаты), `attendance_records` (явки iiko: часы + first_in/last_out), `planned_shifts`, `leader_shifts`, `manual_adjustments`, `iiko_motivation_records`, `worked_shift_records`, view `payroll_employee_totals` (security_invoker).
+
+RLS: функции `current_user_role()`, `is_owner_or_accountant()`, `is_payroll_staff()` (owner/accountant/manager). Менеджер читает данные расчёта и запускает импорт явок; сужение видимости менеджера до своего ресторана — будущий шаг через `user_business_unit_access`.
 
 ## Правила безопасности (жёсткие)
 
 - Только publishable key (`NEXT_PUBLIC_SUPABASE_*`). Никогда не добавлять `service_role`, secret-ключи или строку подключения Postgres — ни в код, ни в env Vercel. Доступ к данным регулируется исключительно RLS.
-- Импорт-эндпоинты (`/api/google-*`) требуют роль owner или accountant — сохранять эту проверку в новых API.
+- Импорт из Google (`/api/google-*`) — только owner/accountant. Импорт явок iiko (`/api/iiko-attendance`) — owner/accountant/manager: это кнопка «Рассчитать зарплату» менеджера (решение владельца от 04.08.2026, см. docs/PAYROLL-CALC.md).
+- Снять отметку «выплачено» может только owner (RLS + server action).
 - `.env.local` не коммитить (есть в `.gitignore`).
 
 ## Особенности
 
-- Расчёт версионируется: всегда показывать последнюю версию `payroll_runs`; известная проблема — на дашборде и странице периода версия берётся по периоду, а не по ресторану (см. PROJECT-OVERVIEW, наблюдение 4).
-- `components/google-schedule-card.tsx` — рабочий, но не подключён (выпал при редизайне дашборда); план — вернуть на страницу импорта.
+- Расчёт версионируется на период × ресторан: везде брать последний `payroll_runs` по каждому ресторану (страница периода и дашборд так и делают с 04.08.2026).
+- Страница периода — сводная «как Google-файл ЗП»: колонки-компоненты, галочки «выплачено» (`payroll_payouts`, server actions в `app/payroll/actions.ts`), кнопка «Рассчитать зарплату» (`components/recalc-button.tsx` → POST `/api/iiko-attendance`; пока обновляет явки из iiko, полный движок начислений — следующий этап).
+- Времена явок iiko (`first_in`/`last_out`) хранятся «как есть», без часового пояса (в базе выглядят как UTC): для опозданий сравнивать чч:мм строки с `planned_start` графика, не конвертировать зоны.
 - Интеграция с Google-таблицами через Apps Script API (env `GOOGLE_SCHEDULE_API_URL`, `GOOGLE_SCHEDULE_API_TOKEN` — настроены в Vercel).
 - Сопоставление сотрудников с внешними источниками — по нормализованному имени + `employee_aliases` (`normalizeName`: нижний регистр, ё→е).

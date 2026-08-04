@@ -53,11 +53,11 @@ async function getAuthorizedClient(): Promise<{
     };
   }
 
-  if (!["owner", "accountant"].includes(profile.role)) {
+  if (!["owner", "accountant", "manager"].includes(profile.role)) {
     return {
       supabase,
       errorResponse: NextResponse.json(
-        { ok: false, error: "Недостаточно прав для импорта явок." },
+        { ok: false, error: "Недостаточно прав для расчёта зарплаты." },
         { status: 403 },
       ),
     };
@@ -123,6 +123,8 @@ type PreparedImport = {
     department_id: string | null;
     work_date: string;
     hours: number;
+    first_in: string | null;
+    last_out: string | null;
     source_system: string;
     external_record_id: string;
   }>;
@@ -318,6 +320,8 @@ async function prepareImport(
       department_id: string | null;
       work_date: string;
       hours: number;
+      first_in: string | null;
+      last_out: string | null;
     }
   >();
 
@@ -364,6 +368,12 @@ async function prepareImport(
 
     if (existing) {
       existing.hours = Math.round((existing.hours + hours) * 10000) / 10000;
+      if (record.dateFrom < (existing.first_in ?? "9999")) {
+        existing.first_in = record.dateFrom;
+      }
+      if (record.dateTo > (existing.last_out ?? "")) {
+        existing.last_out = record.dateTo;
+      }
     } else {
       dayTotals.set(key, {
         employee_id: employeeId,
@@ -371,6 +381,8 @@ async function prepareImport(
         department_id: departmentId,
         work_date: workDate,
         hours,
+        first_in: record.dateFrom || null,
+        last_out: record.dateTo || null,
       });
     }
   }
@@ -441,12 +453,16 @@ async function prepareImport(
       ),
     );
 
+  // Времена iiko приходят без часового пояса и сохраняются как есть (UTC в базе):
+  // при показе сравниваем «условно-локальные» часы-минуты с planned_start графика.
   const attendanceRows = Array.from(dayTotals.values()).map((row) => ({
     employee_id: row.employee_id,
     business_unit_id: row.business_unit_id,
     department_id: row.department_id,
     work_date: row.work_date,
     hours: row.hours,
+    first_in: row.first_in,
+    last_out: row.last_out,
     source_system: "iiko",
     external_record_id: `${row.work_date}:${row.employee_id}:${row.business_unit_id}`,
   }));

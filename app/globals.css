@@ -1778,3 +1778,215 @@ h3 {
   }
 }
 
+/* =========================================================
+   Расчёт ЗП «как файл»: сводная таблица, выплаты, пересчёт
+   ========================================================= */
+
+.payroll-table-wrap.scrollable {
+  overflow-x: auto;
+}
+
+.payroll-table.pivot {
+  min-width: 1150px;
+}
+
+.payroll-table.pivot th,
+.payroll-table.pivot td {
+  padding: 10px 11px;
+  white-space: nowrap;
+}
+
+.payroll-table.pivot td {
+  font-size: 13px;
+}
+
+.payroll-table.pivot tfoot td {
+  background: #f4f8fb;
+  border-top: 2px solid #dfe8ee;
+  border-bottom: 0;
+  font-weight: 800;
+}
+
+.employee-link:hover strong {
+  color: var(--brand);
+}
+
+.rate-hint {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.dim {
+  color: #b3c1cb;
+}
+
+.warn-badge {
+  display: inline-flex;
+  padding: 2px 8px;
+  color: var(--amber);
+  background: var(--amber-soft);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.problem-row td {
+  background: #fdf1f0;
+}
+
+.payout-cell {
+  min-width: 130px;
+}
+
+.payout-state {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+
+.paid-badge {
+  padding: 3px 9px;
+  color: var(--green);
+  background: var(--green-soft);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.paid-diff {
+  color: var(--amber);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.paid-diff.overpaid {
+  color: #a8412a;
+}
+
+.payout-mark {
+  min-height: 32px;
+  padding: 0 13px;
+  color: white;
+  background: var(--brand);
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.payout-mark:hover {
+  background: var(--brand-dark);
+}
+
+.payout-mark:disabled {
+  background: #aeb8c4;
+  cursor: not-allowed;
+}
+
+.payout-unmark {
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 11px;
+  text-decoration: underline;
+}
+
+.payout-unmark:hover {
+  color: #a8412a;
+}
+
+.payout-error {
+  max-width: 190px;
+  color: #a8412a;
+  font-size: 11px;
+  white-space: normal;
+}
+
+.payout-empty {
+  color: #b3c1cb;
+}
+
+.recalc-block {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.recalc-button {
+  min-height: 48px;
+  padding: 0 22px;
+  color: white;
+  background: var(--brand);
+  border: 0;
+  border-radius: 13px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 800;
+  box-shadow: 0 10px 24px rgba(35, 74, 104, 0.18);
+}
+
+.recalc-button:hover {
+  background: var(--brand-dark);
+}
+
+.recalc-button:disabled {
+  background: #aeb8c4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.recalc-message {
+  max-width: 340px;
+  margin: 0;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.recalc-message.error {
+  color: #a8412a;
+}
+
+.shift-status {
+  display: inline-flex;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.shift-status.ok {
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+.shift-status.late {
+  color: var(--amber);
+  background: var(--amber-soft);
+}
+
+.shift-status.missed {
+  color: #a8412a;
+  background: #fdeae7;
+}
+
+.shift-status.extra {
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.leader-hint {
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 800;
+}
+
