@@ -104,21 +104,33 @@ export async function GET(request: NextRequest) {
 
       const dateField = params.get("dateField") ?? "OpenDate.Typed";
 
+      const filters: Record<string, unknown> = {
+        [dateField]: {
+          filterType: "DateRange",
+          periodType: "CUSTOM",
+          from,
+          to,
+          includeLow: true,
+          includeHigh: true,
+        },
+      };
+
+      // Необязательный фильтр по значениям: ?vfField=Account.Name&vfValues=Зарплата|Другой счёт
+      const vfField = params.get("vfField");
+      const vfValues = (params.get("vfValues") ?? "")
+        .split("|")
+        .map((value) => value.trim())
+        .filter(Boolean);
+      if (vfField && vfValues.length > 0) {
+        filters[vfField] = { filterType: "IncludeValues", values: vfValues };
+      }
+
       const body: Record<string, unknown> = {
         reportType,
         buildSummary: "false",
         groupByRowFields: group,
         aggregateFields: agg,
-        filters: {
-          [dateField]: {
-            filterType: "DateRange",
-            periodType: "CUSTOM",
-            from,
-            to,
-            includeLow: true,
-            includeHigh: true,
-          },
-        },
+        filters,
       };
 
       const raw = await runOlapReport(body);
