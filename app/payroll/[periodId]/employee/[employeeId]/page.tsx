@@ -229,6 +229,7 @@ export default async function EmployeePayrollPage({ params, searchParams }: Prop
   );
   const missedDays = shiftDays.filter((day) => day.status === "missed").length;
   const extraDays = shiftDays.filter((day) => day.status === "extra").length;
+  const leaderDays = shiftDays.filter((day) => day.isLeader).length;
   const factHoursTotal = shiftDays.reduce((sum, day) => sum + day.factHours, 0);
   const timesKnown = shiftDays.some((day) => day.factIn !== null);
 
@@ -363,6 +364,10 @@ export default async function EmployeePayrollPage({ params, searchParams }: Prop
                       maximumFractionDigits: 2,
                     })}
                   </strong>
+                </article>
+                <article>
+                  <span>Шифт-лидерские смены</span>
+                  <strong>{leaderDays > 0 ? leaderDays : "не было"}</strong>
                 </article>
               </section>
 

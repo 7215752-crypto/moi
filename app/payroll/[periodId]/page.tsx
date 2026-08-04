@@ -437,14 +437,7 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
             </div>
             <p className="muted wide">
               {formatDate(period.date_from)} — {formatDate(period.date_to)} ·
-              выплата до {formatDate(period.payment_due_date)} ·{" "}
-              <Link
-                className="portal-link"
-                href={`/admin/leader-shifts?period=${periodId}`}
-                title="Подтвердить шифт-лидерские смены периода"
-              >
-                шифт-лидерские смены →
-              </Link>
+              выплата до {formatDate(period.payment_due_date)}
             </p>
           </div>
           {canRecalc && (
