@@ -2,31 +2,31 @@
 
 import { useEffect, useState } from "react";
 
-type Mode = "auto" | "light" | "dark";
+type Mode = "dark" | "light" | "auto";
 
 const LABELS: Record<Mode, string> = {
-  auto: "как в системе",
-  light: "светлая",
   dark: "тёмная",
+  light: "светлая",
+  auto: "как в системе",
 };
 
-const ORDER: Mode[] = ["auto", "light", "dark"];
+// Тёмная — тема по умолчанию.
+const ORDER: Mode[] = ["dark", "light", "auto"];
 
 export function ThemeToggle() {
-  const [mode, setMode] = useState<Mode>("auto");
+  const [mode, setMode] = useState<Mode>("dark");
 
   useEffect(() => {
     const saved = localStorage.getItem("moi-theme");
-    if (saved === "light" || saved === "dark") setMode(saved);
+    if (saved === "light" || saved === "auto") setMode(saved);
   }, []);
 
   const apply = (next: Mode) => {
     setMode(next);
+    localStorage.setItem("moi-theme", next);
     if (next === "auto") {
-      localStorage.removeItem("moi-theme");
       delete document.documentElement.dataset.theme;
     } else {
-      localStorage.setItem("moi-theme", next);
       document.documentElement.dataset.theme = next;
     }
   };
@@ -41,7 +41,7 @@ export function ThemeToggle() {
       type="button"
       className="theme-toggle"
       onClick={cycle}
-      title="Переключить тему оформления: как в системе → светлая → тёмная"
+      title="Переключить тему оформления: тёмная → светлая → как в системе"
     >
       Тема: {LABELS[mode]}
     </button>

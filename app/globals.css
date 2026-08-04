@@ -1980,6 +1980,28 @@ h3 {
   cursor: not-allowed;
 }
 
+.payout-paid {
+  min-height: 30px;
+  padding: 0 12px;
+  color: #ffffff;
+  background: var(--green);
+  border: 1px solid var(--green);
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.payout-paid:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+.payout-paid:disabled {
+  cursor: default;
+  opacity: 0.9;
+}
+
 .payout-unmark {
   padding: 0;
   color: var(--muted);

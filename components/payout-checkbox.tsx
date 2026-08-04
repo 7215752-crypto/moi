@@ -45,14 +45,36 @@ export function PayoutCheckbox({
       minute: "2-digit",
     });
 
+    const unmark = () => {
+      const confirmed = window.confirm(
+        `Снять отметку «выплачено» — ${employeeName}?\n\nСтрока снова станет доступна для выплаты.`,
+      );
+      if (!confirmed) return;
+      setError(null);
+      startTransition(async () => {
+        const result = await unmarkPaid({
+          periodId,
+          businessUnitId,
+          employeeId,
+        });
+        if (!result.ok) setError(result.error ?? "Не получилось.");
+      });
+    };
+
     return (
       <div className="payout-state">
-        <span
-          className="paid-badge"
-          title={`${formatMoney(paidAmount)} · отметил ${payout.paid_by_name ?? "—"} · ${paidAt}`}
+        <button
+          type="button"
+          className="payout-paid"
+          disabled={isPending || !canUnmark}
+          onClick={canUnmark ? unmark : undefined}
+          title={
+            `${formatMoney(paidAmount)} · отметил ${payout.paid_by_name ?? "—"} · ${paidAt}` +
+            (canUnmark ? " · нажмите, чтобы откатить выплату" : "")
+          }
         >
-          ✓ выплачено
-        </span>
+          {isPending ? "…" : "✓ Выплачено"}
+        </button>
         {Math.round(diff) !== 0 && (
           <span
             className={`paid-diff ${diff > 0 ? "underpaid" : "overpaid"}`}
@@ -62,30 +84,6 @@ export function PayoutCheckbox({
               ? `доплата ${formatMoneyWhole(diff)}`
               : `переплата ${formatMoneyWhole(-diff)}`}
           </span>
-        )}
-        {canUnmark && (
-          <button
-            type="button"
-            className="payout-unmark"
-            disabled={isPending}
-            onClick={() => {
-              const confirmed = window.confirm(
-                `Снять отметку «выплачено» — ${employeeName}?\n\nСтрока снова станет доступна для выплаты.`,
-              );
-              if (!confirmed) return;
-              setError(null);
-              startTransition(async () => {
-                const result = await unmarkPaid({
-                  periodId,
-                  businessUnitId,
-                  employeeId,
-                });
-                if (!result.ok) setError(result.error ?? "Не получилось.");
-              });
-            }}
-          >
-            снять
-          </button>
         )}
         {error && <span className="payout-error">{error}</span>}
       </div>

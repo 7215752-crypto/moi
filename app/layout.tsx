@@ -7,7 +7,8 @@ export const metadata: Metadata = {
 };
 
 // Применяем сохранённую тему до отрисовки, чтобы страница не мигала.
-const themeInitScript = `try{var t=localStorage.getItem("moi-theme");if(t==="light"||t==="dark"){document.documentElement.dataset.theme=t}}catch(e){}`;
+// По умолчанию (нет сохранённого выбора) — тёмная; «auto» = как в системе.
+const themeInitScript = `try{var t=localStorage.getItem("moi-theme");if(t==="light"||t==="dark"){document.documentElement.dataset.theme=t}else if(t!=="auto"){document.documentElement.dataset.theme="dark"}}catch(e){document.documentElement.dataset.theme="dark"}`;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
