@@ -300,6 +300,22 @@ export function IikoAttendanceCard({
             </div>
           )}
 
+          {(result.unmatched_business_units?.length ?? 0) > 0 && (
+            <div
+              style={{
+                marginTop: "18px",
+                padding: "14px 16px",
+                borderRadius: "10px",
+                background: "#fff7e6",
+                color: "#874d00",
+              }}
+            >
+              <strong>Нераспознанные подразделения iiko:</strong>{" "}
+              {result.unmatched_business_units?.join(", ")} — часы по ним
+              пропущены, сообщите разработчику.
+            </div>
+          )}
+
           {summary.length > 0 && (
             <div style={{ marginTop: "22px" }}>
               <h3>Часы по сотрудникам</h3>

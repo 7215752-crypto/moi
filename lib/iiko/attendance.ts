@@ -12,9 +12,20 @@ export type IikoAttendance = {
   departmentName: string;
 };
 
+// XML экранирует спецсимволы: «&» приходит как «&amp;» и т.п.
+function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&amp;/g, "&");
+}
+
 function extractTag(block: string, tag: string): string {
   const match = block.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`));
-  return match ? match[1].trim() : "";
+  return match ? decodeXmlEntities(match[1].trim()) : "";
 }
 
 function extractBlocks(xml: string, tag: string): string[] {
