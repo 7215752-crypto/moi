@@ -1782,12 +1782,45 @@ h3 {
    Расчёт ЗП «как файл»: сводная таблица, выплаты, пересчёт
    ========================================================= */
 
+/* Широкая сводная таблица: скролл строго внутри карточки, grid не распирает. */
+.unit-groups {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.unit-section {
+  min-width: 0;
+}
+
 .payroll-table-wrap.scrollable {
+  max-width: 100%;
   overflow-x: auto;
 }
 
 .payroll-table.pivot {
   min-width: 1150px;
+}
+
+.payroll-table.pivot th:first-child,
+.payroll-table.pivot td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: white;
+  border-right: 1px solid #e8eff4;
+}
+
+.payroll-table.pivot thead th:first-child,
+.payroll-table.pivot tfoot td:first-child {
+  z-index: 2;
+  background: #f4f8fb;
+}
+
+.payroll-table.pivot tbody tr:hover td:first-child {
+  background: #f5f9fc;
+}
+
+.payroll-table.pivot .problem-row td:first-child {
+  background: #fdf1f0;
 }
 
 .payroll-table.pivot th,
