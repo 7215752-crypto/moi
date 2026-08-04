@@ -96,3 +96,40 @@ export async function getEmployeesAndAttendance(
     return { employeesXml, attendanceXml };
   });
 }
+
+// Список доступных полей OLAP-отчёта (SALES / TRANSACTIONS / DELIVERIES).
+export async function getOlapColumns(reportType: string): Promise<string> {
+  return withIikoServerSession((token) =>
+    fetchXml(
+      token,
+      `/v2/reports/olap/columns?reportType=${encodeURIComponent(reportType)}`,
+      "поля OLAP",
+    ),
+  );
+}
+
+// Запрос OLAP-отчёта v2 (тело — по документации iikoServer).
+export async function runOlapReport(
+  body: Record<string, unknown>,
+): Promise<string> {
+  return withIikoServerSession(async (token) => {
+    const response = await fetch(
+      `${IIKO_SERVER_BASE}/v2/reports/olap?key=${token}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+        body: JSON.stringify(body),
+        cache: "no-store",
+      },
+    );
+    const text = await response.text();
+
+    if (!response.ok) {
+      throw new Error(
+        `Ошибка OLAP-отчёта (HTTP ${response.status}): ${text.substring(0, 800)}`,
+      );
+    }
+
+    return text;
+  });
+}
