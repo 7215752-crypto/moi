@@ -147,6 +147,7 @@ async function prepareImport(
     { data: businessUnits, error: businessUnitsError },
     { data: assignments, error: assignmentsError },
     { data: rates, error: ratesError },
+    { data: plannedShifts, error: plannedShiftsError },
   ] = await Promise.all([
     supabase.from("employees").select("id, full_name"),
     supabase
@@ -163,6 +164,11 @@ async function prepareImport(
       .select(
         "employee_id, business_unit_id, department_id, rate_type, valid_from, valid_to",
       ),
+    supabase
+      .from("planned_shifts")
+      .select("employee_id, business_unit_id, department_id, shift_date")
+      .gte("shift_date", from)
+      .lte("shift_date", to),
   ]);
 
   if (employeesError) throw new Error(`Сотрудники: ${employeesError.message}`);
@@ -172,6 +178,18 @@ async function prepareImport(
   if (assignmentsError)
     throw new Error(`Назначения: ${assignmentsError.message}`);
   if (ratesError) throw new Error(`Ставки: ${ratesError.message}`);
+  if (plannedShiftsError)
+    throw new Error(`График смен: ${plannedShiftsError.message}`);
+
+  // Подразделение дня из графика Google: сотрудник × ресторан × дата.
+  const plannedDepartmentByDay = new Map<string, string>();
+  for (const shift of plannedShifts ?? []) {
+    if (!shift.department_id) continue;
+    plannedDepartmentByDay.set(
+      `${shift.employee_id}|${shift.business_unit_id}|${shift.shift_date}`,
+      shift.department_id,
+    );
+  }
 
   // Сопоставление сотрудников: сперва по сохранённому iiko-ID, затем по ФИО
   // (в т.ч. с перестановкой имени и фамилии; неоднозначные совпадения пропускаем).
@@ -335,7 +353,11 @@ async function prepareImport(
       continue;
     }
 
-    const departmentId = assignmentDepartment(employeeId, unit.id);
+    // Приоритет — плановое подразделение из графика (бар/зал в конкретный день),
+    // затем постоянное назначение сотрудника.
+    const departmentId =
+      plannedDepartmentByDay.get(`${employeeId}|${unit.id}|${workDate}`) ??
+      assignmentDepartment(employeeId, unit.id);
     const key = `${employeeId}|${unit.id}|${workDate}`;
     const existing = dayTotals.get(key);
 
