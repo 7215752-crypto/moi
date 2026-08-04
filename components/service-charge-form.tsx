@@ -152,14 +152,7 @@ export function ServiceChargeForm({
 
   if (error && !data) {
     return (
-      <div
-        style={{
-          padding: "14px 16px",
-          borderRadius: "10px",
-          background: "#fff1f0",
-          color: "#a8071a",
-        }}
-      >
+      <div className="notice error" style={{ marginTop: 0 }}>
         <strong>Ошибка:</strong> {error}
       </div>
     );
@@ -187,7 +180,13 @@ export function ServiceChargeForm({
           <span>{overLimit ? "Превышение!" : "Осталось"}</span>
           <strong
             className="metric-money"
-            style={{ color: overLimit ? "#a8071a" : remainder < 0.01 ? "#176b35" : undefined }}
+            style={{
+              color: overLimit
+                ? "var(--danger)"
+                : remainder < 0.01
+                  ? "var(--green)"
+                  : undefined,
+            }}
           >
             {money(Math.abs(remainder))}
           </strong>
@@ -202,28 +201,12 @@ export function ServiceChargeForm({
       </section>
 
       {message && (
-        <div
-          style={{
-            marginBottom: "16px",
-            padding: "13px 16px",
-            borderRadius: "10px",
-            background: "#edf8f0",
-            color: "#176b35",
-          }}
-        >
+        <div className="notice success" style={{ margin: "0 0 16px" }}>
           {message}
         </div>
       )}
       {error && (
-        <div
-          style={{
-            marginBottom: "16px",
-            padding: "13px 16px",
-            borderRadius: "10px",
-            background: "#fff1f0",
-            color: "#a8071a",
-          }}
-        >
+        <div className="notice error" style={{ margin: "0 0 16px" }}>
           <strong>Ошибка:</strong> {error}
         </div>
       )}
@@ -270,15 +253,8 @@ export function ServiceChargeForm({
                           [employee.employee_id]: event.target.value,
                         }))
                       }
-                      style={{
-                        width: "100%",
-                        padding: "9px 10px",
-                        border: "1px solid #d7dce2",
-                        borderRadius: "9px",
-                        background: "white",
-                        font: "inherit",
-                        textAlign: "right",
-                      }}
+                      className="form-input"
+                      style={{ width: "100%", textAlign: "right" }}
                     />
                   </td>
                 </tr>
@@ -300,23 +276,17 @@ export function ServiceChargeForm({
             type="button"
             onClick={save}
             disabled={saving || overLimit}
-            className="primary-button"
-            style={{
-              padding: "12px 22px",
-              background: overLimit ? "#aeb8c4" : "#1f6feb",
-              color: "white",
-              cursor: saving || overLimit ? "not-allowed" : "pointer",
-            }}
+            className="action-button primary"
           >
             {saving ? "Сохраняем…" : "Сохранить распределение"}
           </button>
           {overLimit && (
-            <span style={{ color: "#a8071a", fontWeight: 600 }}>
+            <span style={{ color: "var(--danger)", fontWeight: 600 }}>
               Уменьшите суммы: распределено больше, чем собрано.
             </span>
           )}
           {!overLimit && remainder > 0.005 && (
-            <span style={{ color: "#874d00" }}>
+            <span style={{ color: "var(--amber)" }}>
               Осталось распределить {money(remainder)} — можно сохранить и
               вернуться позже.
             </span>

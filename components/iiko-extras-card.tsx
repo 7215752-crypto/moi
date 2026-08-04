@@ -104,14 +104,6 @@ export function IikoExtrasCard({ initialFrom, initialTo }: IikoExtrasCardProps) 
     ...(result?.purchases_unmatched ?? []),
   ];
 
-  const inputStyle = {
-    padding: "11px 12px",
-    border: "1px solid #d7dce2",
-    borderRadius: "10px",
-    background: "white",
-    font: "inherit",
-  } as const;
-
   return (
     <section className="content-card">
       <div className="section-heading">
@@ -144,7 +136,7 @@ export function IikoExtrasCard({ initialFrom, initialTo }: IikoExtrasCardProps) 
               setHasChecked(false);
               setResult(null);
             }}
-            style={inputStyle}
+            className="form-input"
           />
         </label>
 
@@ -159,43 +151,24 @@ export function IikoExtrasCard({ initialFrom, initialTo }: IikoExtrasCardProps) 
               setHasChecked(false);
               setResult(null);
             }}
-            style={inputStyle}
+            className="form-input"
           />
         </label>
 
         <button
           type="button"
+          className="action-button"
           onClick={() => run("GET")}
           disabled={isLoading}
-          style={{
-            padding: "12px 18px",
-            border: "1px solid #cfd5dc",
-            borderRadius: "10px",
-            background: "white",
-            color: "#17202a",
-            font: "inherit",
-            fontWeight: 700,
-            cursor: isLoading ? "not-allowed" : "pointer",
-            opacity: isLoading ? 0.65 : 1,
-          }}
         >
           {action === "check" ? "Проверяем…" : "Проверить"}
         </button>
 
         <button
           type="button"
+          className="action-button primary"
           onClick={() => run("POST")}
           disabled={isLoading || !hasChecked}
-          style={{
-            padding: "12px 18px",
-            border: 0,
-            borderRadius: "10px",
-            background: hasChecked && !isLoading ? "#1f6feb" : "#aeb8c4",
-            color: "white",
-            font: "inherit",
-            fontWeight: 700,
-            cursor: hasChecked && !isLoading ? "pointer" : "not-allowed",
-          }}
         >
           {action === "import" ? "Импортируем…" : "Импортировать"}
         </button>
@@ -208,15 +181,7 @@ export function IikoExtrasCard({ initialFrom, initialTo }: IikoExtrasCardProps) 
       )}
 
       {result && !result.ok && (
-        <div
-          style={{
-            marginTop: "20px",
-            padding: "14px 16px",
-            borderRadius: "10px",
-            background: "#fff1f0",
-            color: "#a8071a",
-          }}
-        >
+        <div className="notice error">
           <strong>Ошибка:</strong> {result.error ?? "Неизвестная ошибка"}
         </div>
       )}
@@ -251,15 +216,7 @@ export function IikoExtrasCard({ initialFrom, initialTo }: IikoExtrasCardProps) 
           </div>
 
           {isImportResult && (
-            <div
-              style={{
-                marginTop: "18px",
-                padding: "14px 16px",
-                borderRadius: "10px",
-                background: "#edf8f0",
-                color: "#176b35",
-              }}
-            >
+            <div className="notice success">
               <strong>Импорт завершён.</strong> Бонусы:{" "}
               {result.imported_bonus_count}, покупки:{" "}
               {result.imported_purchase_count}, сервисный сбор:{" "}
@@ -276,15 +233,7 @@ export function IikoExtrasCard({ initialFrom, initialTo }: IikoExtrasCardProps) 
           )}
 
           {(result.bonuses_unassigned ?? 0) > 0 && (
-            <div
-              style={{
-                marginTop: "14px",
-                padding: "12px 16px",
-                borderRadius: "10px",
-                background: "#fff7e6",
-                color: "#874d00",
-              }}
-            >
+            <div className="notice warn">
               На счёте «Зарплата» есть {money(result.bonuses_unassigned)} без
               привязки к сотруднику — эта сумма в импорт не входит, проверьте
               документ в iiko.
@@ -296,17 +245,7 @@ export function IikoExtrasCard({ initialFrom, initialTo }: IikoExtrasCardProps) 
               <h3>Не сопоставлены с сотрудниками портала</h3>
               <div style={{ display: "grid", gap: "8px", marginTop: "10px" }}>
                 {unmatched.map((row) => (
-                  <div
-                    key={row.name}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: "16px",
-                      padding: "10px 12px",
-                      border: "1px solid #e2e6eb",
-                      borderRadius: "9px",
-                    }}
-                  >
+                  <div key={row.name} className="plain-row">
                     <span>{row.name}</span>
                     <strong>{money(row.amount)}</strong>
                   </div>

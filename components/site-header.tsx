@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 type HeaderProfile = {
   role: string;
@@ -98,6 +99,8 @@ export function SiteHeader({
       </div>
 
       <div className="header-right">
+        <ThemeToggle />
+
         <span className="header-role">
           {roleLabels[profile.role] ??
             profile.role}

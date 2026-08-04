@@ -328,7 +328,7 @@ export default async function DashboardPage() {
             >
               <div className="portal-card-top">
                 <span className="portal-card-number">
-                  ⚙️
+                  04
                 </span>
 
                 <span className="portal-status">

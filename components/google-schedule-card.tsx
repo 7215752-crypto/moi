@@ -209,6 +209,7 @@ export function GoogleScheduleCard({
           </span>
 
           <select
+            className="form-input"
             value={month}
             disabled={isLoading}
             onChange={(event) =>
@@ -216,14 +217,7 @@ export function GoogleScheduleCard({
                 Number(event.target.value),
               )
             }
-            style={{
-              minWidth: "170px",
-              padding: "11px 12px",
-              border: "1px solid #d7dce2",
-              borderRadius: "10px",
-              background: "white",
-              font: "inherit",
-            }}
+            style={{ minWidth: "170px" }}
           >
             <option value={1}>Январь</option>
             <option value={2}>Февраль</option>
@@ -252,6 +246,7 @@ export function GoogleScheduleCard({
 
           <input
             type="number"
+            className="form-input"
             min={2020}
             max={2100}
             value={year}
@@ -261,34 +256,15 @@ export function GoogleScheduleCard({
                 Number(event.target.value),
               )
             }
-            style={{
-              width: "120px",
-              padding: "11px 12px",
-              border: "1px solid #d7dce2",
-              borderRadius: "10px",
-              background: "white",
-              font: "inherit",
-            }}
+            style={{ width: "120px" }}
           />
         </label>
 
         <button
           type="button"
+          className="action-button"
           onClick={checkSchedule}
           disabled={isLoading}
-          style={{
-            padding: "12px 18px",
-            border: "1px solid #cfd5dc",
-            borderRadius: "10px",
-            background: "white",
-            color: "#17202a",
-            font: "inherit",
-            fontWeight: 700,
-            cursor: isLoading
-              ? "not-allowed"
-              : "pointer",
-            opacity: isLoading ? 0.65 : 1,
-          }}
         >
           {action === "check"
             ? "Проверяем…"
@@ -297,27 +273,12 @@ export function GoogleScheduleCard({
 
         <button
           type="button"
+          className="action-button primary"
           onClick={importSchedule}
           disabled={
             isLoading ||
             !hasChecked
           }
-          style={{
-            padding: "12px 18px",
-            border: 0,
-            borderRadius: "10px",
-            background:
-              hasChecked && !isLoading
-                ? "#1f6feb"
-                : "#aeb8c4",
-            color: "white",
-            font: "inherit",
-            fontWeight: 700,
-            cursor:
-              hasChecked && !isLoading
-                ? "pointer"
-                : "not-allowed",
-          }}
         >
           {action === "import"
             ? "Импортируем…"
@@ -335,15 +296,7 @@ export function GoogleScheduleCard({
       )}
 
       {result && !result.ok && (
-        <div
-          style={{
-            marginTop: "20px",
-            padding: "14px 16px",
-            borderRadius: "10px",
-            background: "#fff1f0",
-            color: "#a8071a",
-          }}
-        >
+        <div className="notice error">
           <strong>Ошибка:</strong>{" "}
           {result.error ??
             "Неизвестная ошибка"}
@@ -414,15 +367,7 @@ export function GoogleScheduleCard({
           </div>
 
           {isImportResult && (
-            <div
-              style={{
-                marginTop: "18px",
-                padding: "14px 16px",
-                borderRadius: "10px",
-                background: "#edf8f0",
-                color: "#176b35",
-              }}
-            >
+            <div className="notice success">
               <strong>
                 Импорт завершён.
               </strong>{" "}
@@ -464,16 +409,7 @@ export function GoogleScheduleCard({
                       key={
                         employee.employee_name
                       }
-                      style={{
-                        display: "flex",
-                        justifyContent:
-                          "space-between",
-                        gap: "16px",
-                        padding: "10px 12px",
-                        border:
-                          "1px solid #e2e6eb",
-                        borderRadius: "9px",
-                      }}
+                      className="plain-row"
                     >
                       <span>
                         {

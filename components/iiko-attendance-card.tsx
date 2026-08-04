@@ -137,14 +137,6 @@ export function IikoAttendanceCard({
   const unmatchedEmployees = result?.unmatched_employees ?? [];
   const withoutRate = summary.filter((row) => !row.has_rate);
 
-  const inputStyle = {
-    padding: "11px 12px",
-    border: "1px solid #d7dce2",
-    borderRadius: "10px",
-    background: "white",
-    font: "inherit",
-  } as const;
-
   return (
     <section className="content-card">
       <div className="section-heading">
@@ -171,10 +163,10 @@ export function IikoAttendanceCard({
           <span className="muted">С даты</span>
           <input
             type="date"
+            className="form-input"
             value={from}
             disabled={isLoading}
             onChange={(event) => changeFrom(event.target.value)}
-            style={inputStyle}
           />
         </label>
 
@@ -182,46 +174,27 @@ export function IikoAttendanceCard({
           <span className="muted">По дату</span>
           <input
             type="date"
+            className="form-input"
             value={to}
             disabled={isLoading}
             onChange={(event) => changeTo(event.target.value)}
-            style={inputStyle}
           />
         </label>
 
         <button
           type="button"
+          className="action-button"
           onClick={checkAttendance}
           disabled={isLoading}
-          style={{
-            padding: "12px 18px",
-            border: "1px solid #cfd5dc",
-            borderRadius: "10px",
-            background: "white",
-            color: "#17202a",
-            font: "inherit",
-            fontWeight: 700,
-            cursor: isLoading ? "not-allowed" : "pointer",
-            opacity: isLoading ? 0.65 : 1,
-          }}
         >
           {action === "check" ? "Проверяем…" : "Проверить явки"}
         </button>
 
         <button
           type="button"
+          className="action-button primary"
           onClick={importAttendance}
           disabled={isLoading || !hasChecked}
-          style={{
-            padding: "12px 18px",
-            border: 0,
-            borderRadius: "10px",
-            background: hasChecked && !isLoading ? "#1f6feb" : "#aeb8c4",
-            color: "white",
-            font: "inherit",
-            fontWeight: 700,
-            cursor: hasChecked && !isLoading ? "pointer" : "not-allowed",
-          }}
         >
           {action === "import" ? "Импортируем…" : "Импортировать явки"}
         </button>
@@ -234,15 +207,7 @@ export function IikoAttendanceCard({
       )}
 
       {result && !result.ok && (
-        <div
-          style={{
-            marginTop: "20px",
-            padding: "14px 16px",
-            borderRadius: "10px",
-            background: "#fff1f0",
-            color: "#a8071a",
-          }}
-        >
+        <div className="notice error">
           <strong>Ошибка:</strong> {result.error ?? "Неизвестная ошибка"}
         </div>
       )}
@@ -278,15 +243,7 @@ export function IikoAttendanceCard({
           </div>
 
           {isImportResult && (
-            <div
-              style={{
-                marginTop: "18px",
-                padding: "14px 16px",
-                borderRadius: "10px",
-                background: "#edf8f0",
-                color: "#176b35",
-              }}
-            >
+            <div className="notice success">
               <strong>Импорт завершён.</strong> Часы записаны, можно
               переходить к расчёту периода.
               {(result.created_employees?.length ?? 0) > 0 && (
@@ -301,15 +258,7 @@ export function IikoAttendanceCard({
           )}
 
           {(result.unmatched_business_units?.length ?? 0) > 0 && (
-            <div
-              style={{
-                marginTop: "18px",
-                padding: "14px 16px",
-                borderRadius: "10px",
-                background: "#fff7e6",
-                color: "#874d00",
-              }}
-            >
+            <div className="notice warn">
               <strong>Нераспознанные подразделения iiko:</strong>{" "}
               {result.unmatched_business_units?.join(", ")} — часы по ним
               пропущены, сообщите разработчику.
@@ -353,17 +302,7 @@ export function IikoAttendanceCard({
               <h3>Не найдены в базе портала</h3>
               <div style={{ display: "grid", gap: "8px", marginTop: "10px" }}>
                 {unmatchedEmployees.map((employee) => (
-                  <div
-                    key={employee.employee_name}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: "16px",
-                      padding: "10px 12px",
-                      border: "1px solid #e2e6eb",
-                      borderRadius: "9px",
-                    }}
-                  >
+                  <div key={employee.employee_name} className="plain-row">
                     <span>{employee.employee_name}</span>
                     <strong>{employee.total_hours} ч</strong>
                   </div>
