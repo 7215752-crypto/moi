@@ -448,7 +448,7 @@ async function prepareImport(
     work_date: row.work_date,
     hours: row.hours,
     source_system: "iiko",
-    external_record_id: `${row.work_date}:${row.employee_id}`,
+    external_record_id: `${row.work_date}:${row.employee_id}:${row.business_unit_id}`,
   }));
 
   // Сотрудники со ставкой «за смену»: их день с явкой станет одной сменой.
