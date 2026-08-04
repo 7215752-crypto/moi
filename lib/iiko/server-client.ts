@@ -18,9 +18,7 @@ async function withIikoServerSession<T>(
     );
   }
 
-  const passHash = sha1(password);
-
-  const authBody = new URLSearchParams({ login, pass: passHash });
+  const authBody = new URLSearchParams({ login, pass: sha1(password) });
 
   const authResponse = await fetch(`${IIKO_SERVER_BASE}/auth`, {
     method: "POST",
@@ -46,24 +44,55 @@ async function withIikoServerSession<T>(
   }
 }
 
+async function fetchXml(
+  token: string,
+  path: string,
+  label: string,
+): Promise<string> {
+  const separator = path.includes("?") ? "&" : "?";
+  const response = await fetch(
+    `${IIKO_SERVER_BASE}${path}${separator}key=${token}`,
+    { cache: "no-store" },
+  );
+  const text = await response.text();
+
+  if (!response.ok) {
+    throw new Error(
+      `Ошибка iikoServer (${label}, HTTP ${response.status}): ${text.substring(0, 500)}`,
+    );
+  }
+
+  return text;
+}
+
 export async function getAttendanceXml(
   dateFrom: string,
   dateTo: string,
 ): Promise<string> {
+  return withIikoServerSession((token) =>
+    fetchXml(
+      token,
+      `/employees/attendance?from=${dateFrom}&to=${dateTo}&withPaymentDetails=true`,
+      "явки",
+    ),
+  );
+}
+
+export async function getEmployeesAndAttendance(
+  dateFrom: string,
+  dateTo: string,
+): Promise<{ employeesXml: string; attendanceXml: string }> {
   return withIikoServerSession(async (token) => {
-    const url =
-      `${IIKO_SERVER_BASE}/employees/attendance` +
-      `?from=${dateFrom}&to=${dateTo}&withPaymentDetails=true&key=${token}`;
-
-    const response = await fetch(url, { cache: "no-store" });
-    const text = await response.text();
-
-    if (!response.ok) {
-      throw new Error(
-        `Ошибка получения явок (HTTP ${response.status}): ${text.substring(0, 500)}`,
-      );
-    }
-
-    return text;
+    const employeesXml = await fetchXml(
+      token,
+      "/employees?includeDeleted=false",
+      "сотрудники",
+    );
+    const attendanceXml = await fetchXml(
+      token,
+      `/employees/attendance?from=${dateFrom}&to=${dateTo}&withPaymentDetails=true`,
+      "явки",
+    );
+    return { employeesXml, attendanceXml };
   });
 }
