@@ -2,6 +2,7 @@ import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { GoogleScheduleCard } from "@/components/google-schedule-card";
 import { IikoAttendanceCard } from "@/components/iiko-attendance-card";
+import { IikoExtrasCard } from "@/components/iiko-extras-card";
 import { requireUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
@@ -56,6 +57,11 @@ export default async function ImportPage() {
         </section>
 
         <IikoAttendanceCard
+          initialFrom={halfMonth.from}
+          initialTo={halfMonth.to}
+        />
+
+        <IikoExtrasCard
           initialFrom={halfMonth.from}
           initialTo={halfMonth.to}
         />
