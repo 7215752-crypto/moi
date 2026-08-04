@@ -4,6 +4,7 @@ import { getEmployeesAndAttendance } from "@/lib/iiko/server-client";
 import {
   attendanceHours,
   attendanceWorkDate,
+  nameMatchKey,
   normalizeName,
   parseAttendanceXml,
   parseEmployeesXml,
@@ -97,7 +98,12 @@ type PreparedImport = {
   totalSourceRecords: number;
   typeBreakdown: Record<string, number>;
   unmatchedBusinessUnits: string[];
-  unmatchedEmployees: Array<{ employee_name: string; total_hours: number }>;
+  unmatchedEmployees: Array<{
+    iiko_employee_id: string;
+    employee_name: string;
+    known_name: boolean;
+    total_hours: number;
+  }>;
   newAliasRows: Array<{
     employee_id: string;
     source_system: string;
@@ -167,25 +173,39 @@ async function prepareImport(
     throw new Error(`Назначения: ${assignmentsError.message}`);
   if (ratesError) throw new Error(`Ставки: ${ratesError.message}`);
 
-  // Сопоставление сотрудников: сперва по сохранённому iiko-ID, затем по ФИО.
+  // Сопоставление сотрудников: сперва по сохранённому iiko-ID, затем по ФИО
+  // (в т.ч. с перестановкой имени и фамилии; неоднозначные совпадения пропускаем).
   const iikoIdToEmployee = new Map<string, string>();
   const nameToEmployee = new Map<string, string>();
+  const sortedNameToEmployee = new Map<string, string | null>();
+
+  const addNameKeys = (value: string | null | undefined, employeeId: string) => {
+    const key = normalizeName(value);
+    if (!key) return;
+
+    if (!nameToEmployee.has(key)) {
+      nameToEmployee.set(key, employeeId);
+    }
+
+    const sortedKey = nameMatchKey(value);
+    const existing = sortedNameToEmployee.get(sortedKey);
+    if (existing === undefined) {
+      sortedNameToEmployee.set(sortedKey, employeeId);
+    } else if (existing !== employeeId) {
+      sortedNameToEmployee.set(sortedKey, null);
+    }
+  };
 
   for (const employee of employees ?? []) {
-    const key = normalizeName(employee.full_name);
-    if (key) nameToEmployee.set(key, employee.id);
+    addNameKeys(employee.full_name, employee.id);
   }
 
   for (const alias of aliases ?? []) {
     if (alias.source_system === "iiko" && alias.external_key) {
       iikoIdToEmployee.set(alias.external_key, alias.employee_id);
     }
-    for (const value of [alias.external_key, alias.source_name]) {
-      const key = normalizeName(value);
-      if (key && !nameToEmployee.has(key)) {
-        nameToEmployee.set(key, alias.employee_id);
-      }
-    }
+    addNameKeys(alias.external_key, alias.employee_id);
+    addNameKeys(alias.source_name, alias.employee_id);
   }
 
   const iikoEmployeeNameById = new Map<string, string>();
@@ -200,7 +220,10 @@ async function prepareImport(
     if (direct) return direct;
 
     const iikoName = iikoEmployeeNameById.get(iikoEmployeeId);
-    const matched = nameToEmployee.get(normalizeName(iikoName));
+    const matched =
+      nameToEmployee.get(normalizeName(iikoName)) ??
+      sortedNameToEmployee.get(nameMatchKey(iikoName)) ??
+      null;
 
     if (matched && iikoName) {
       iikoIdToEmployee.set(iikoEmployeeId, matched);
@@ -264,7 +287,10 @@ async function prepareImport(
 
   const typeBreakdown: Record<string, number> = {};
   const unmatchedBuSet = new Set<string>();
-  const unmatchedHoursByName = new Map<string, number>();
+  const unmatchedByIikoId = new Map<
+    string,
+    { employee_name: string; known_name: boolean; total_hours: number }
+  >();
   const dayTotals = new Map<
     string,
     {
@@ -294,13 +320,18 @@ async function prepareImport(
 
     const employeeId = resolveEmployee(record.employeeId);
     if (!employeeId) {
-      const name =
-        iikoEmployeeNameById.get(record.employeeId) ??
-        `iiko:${record.employeeId}`;
-      unmatchedHoursByName.set(
-        name,
-        (unmatchedHoursByName.get(name) ?? 0) + hours,
-      );
+      const iikoName = iikoEmployeeNameById.get(record.employeeId);
+      const entry = unmatchedByIikoId.get(record.employeeId);
+
+      if (entry) {
+        entry.total_hours += hours;
+      } else {
+        unmatchedByIikoId.set(record.employeeId, {
+          employee_name: iikoName ?? `iiko:${record.employeeId}`,
+          known_name: Boolean(iikoName),
+          total_hours: hours,
+        });
+      }
       continue;
     }
 
@@ -401,10 +432,12 @@ async function prepareImport(
     totalSourceRecords: iikoAttendances.length,
     typeBreakdown,
     unmatchedBusinessUnits: Array.from(unmatchedBuSet),
-    unmatchedEmployees: Array.from(unmatchedHoursByName.entries())
-      .map(([employee_name, total_hours]) => ({
-        employee_name,
-        total_hours: Math.round(total_hours * 100) / 100,
+    unmatchedEmployees: Array.from(unmatchedByIikoId.entries())
+      .map(([iiko_employee_id, entry]) => ({
+        iiko_employee_id,
+        employee_name: entry.employee_name,
+        known_name: entry.known_name,
+        total_hours: Math.round(entry.total_hours * 100) / 100,
       }))
       .sort((a, b) => a.employee_name.localeCompare(b.employee_name, "ru")),
     newAliasRows,
@@ -455,7 +488,49 @@ export async function POST(request: NextRequest) {
     const period = getPeriod(request);
     if (period.errorResponse) return period.errorResponse;
 
-    const prepared = await prepareImport(supabase, period.from, period.to);
+    let prepared = await prepareImport(supabase, period.from, period.to);
+
+    // Сотрудников, которых нет в базе, создаём автоматически по данным iiko.
+    const creatable = prepared.unmatchedEmployees.filter(
+      (entry) => entry.known_name,
+    );
+    const createdEmployees: string[] = [];
+
+    if (creatable.length > 0) {
+      for (const entry of creatable) {
+        const { data: created, error: createEmployeeError } = await supabase
+          .from("employees")
+          .insert({ full_name: entry.employee_name, status: "active" })
+          .select("id")
+          .single();
+
+        if (createEmployeeError || !created) {
+          throw new Error(
+            `Создание сотрудника «${entry.employee_name}»: ${createEmployeeError?.message ?? "нет ответа"}`,
+          );
+        }
+
+        const { error: createAliasError } = await supabase
+          .from("employee_aliases")
+          .insert({
+            employee_id: created.id,
+            source_system: "iiko",
+            external_key: entry.iiko_employee_id,
+            source_name: entry.employee_name,
+          });
+
+        if (createAliasError) {
+          throw new Error(
+            `Связка сотрудника «${entry.employee_name}» с iiko: ${createAliasError.message}`,
+          );
+        }
+
+        createdEmployees.push(entry.employee_name);
+      }
+
+      // Повторная подготовка: теперь новые сотрудники сопоставятся по iiko-ID.
+      prepared = await prepareImport(supabase, period.from, period.to);
+    }
 
     // Находим или создаём расчётный период.
     const { data: existingPeriod, error: findError } = await supabase
@@ -537,6 +612,7 @@ export async function POST(request: NextRequest) {
       to: period.to,
       payroll_period_id: periodId,
       imported_row_count: rows.length,
+      created_employees: createdEmployees,
       new_alias_count: prepared.newAliasRows.length,
       unmatched_business_units: prepared.unmatchedBusinessUnits,
       unmatched_employees: prepared.unmatchedEmployees,

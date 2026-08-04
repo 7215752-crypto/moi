@@ -74,6 +74,11 @@ export function normalizeName(value: string | null | undefined): string {
     .trim();
 }
 
+// Ключ, не зависящий от порядка слов: «Сафронов Максим» = «Максим Сафронов».
+export function nameMatchKey(value: string | null | undefined): string {
+  return normalizeName(value).split(" ").sort().join(" ");
+}
+
 export function attendanceHours(record: IikoAttendance): number {
   const from = new Date(record.dateFrom).getTime();
   const to = new Date(record.dateTo).getTime();

@@ -22,6 +22,7 @@ type AttendanceResult = {
   source_record_count?: number;
   row_count?: number;
   imported_row_count?: number;
+  created_employees?: string[];
   new_alias_count?: number;
   type_breakdown?: Record<string, number>;
   unmatched_business_units?: string[];
@@ -107,6 +108,7 @@ export function IikoAttendanceCard({
         `Импортировать явки iiko за ${from} — ${to}?`,
         "",
         "Расчётный период будет создан автоматически, если его ещё нет.",
+        "Сотрудники, которых нет в портале, будут созданы автоматически.",
         "Повторный импорт заменит ранее загруженные явки iiko за этот период.",
       ].join("\n"),
     );
@@ -265,7 +267,7 @@ export function IikoAttendanceCard({
             <article className="metric-card">
               <span>Сотрудники без сопоставления</span>
               <strong>{unmatchedEmployees.length}</strong>
-              <small>Их часы не попадут в расчёт</small>
+              <small>Будут созданы автоматически при импорте</small>
             </article>
 
             <article className="metric-card">
@@ -287,6 +289,14 @@ export function IikoAttendanceCard({
             >
               <strong>Импорт завершён.</strong> Часы записаны, можно
               переходить к расчёту периода.
+              {(result.created_employees?.length ?? 0) > 0 && (
+                <>
+                  {" "}
+                  Созданы сотрудники:{" "}
+                  {result.created_employees?.join(", ")}. Не забудьте
+                  указать им ставки.
+                </>
+              )}
             </div>
           )}
 
