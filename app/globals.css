@@ -1980,6 +1980,36 @@ h3 {
   cursor: not-allowed;
 }
 
+.period-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 20px;
+  padding: 4px;
+  background: var(--surface-dim);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  width: fit-content;
+  flex-wrap: wrap;
+}
+
+.period-tab {
+  padding: 8px 16px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.period-tab:hover {
+  color: var(--ink);
+}
+
+.period-tab.active {
+  color: var(--ink);
+  background: var(--surface-strong);
+  box-shadow: var(--shadow);
+}
+
 .payout-paid {
   min-height: 30px;
   padding: 0 12px;
@@ -2179,5 +2209,227 @@ h3 {
   color: var(--brand);
   font-size: 12px;
   font-weight: 800;
+}
+
+/* ---- Товарная аналитика ---- */
+
+.analytics-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.analytics-header h1 {
+  font-size: 26px;
+  margin: 0 0 6px;
+}
+
+.analytics-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.preset-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.preset-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.preset-chip:hover {
+  background: var(--surface-hover);
+  border-color: var(--line-strong);
+}
+
+.preset-chip.active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--on-brand);
+}
+
+.analytics-filter {
+  align-items: flex-end;
+}
+
+.analytics-filter input[type="date"],
+.analytics-filter input[type="text"] {
+  min-width: 130px;
+}
+
+.tab-row {
+  display: flex;
+  gap: 22px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 16px;
+}
+
+.tab-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 2px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.tab-link:hover {
+  color: var(--ink);
+}
+
+.tab-link.active {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--brand);
+}
+
+.tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.abc-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.abc-badge.abc-a {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.abc-badge.abc-b {
+  background: var(--surface-dim);
+  color: var(--muted);
+}
+
+.abc-badge.abc-c {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.delta-up {
+  color: var(--green);
+}
+
+.delta-down {
+  color: var(--danger);
+}
+
+.delta-new {
+  color: var(--faint);
+}
+
+.dish-link {
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.dish-link:hover {
+  border-bottom-color: var(--ink);
+}
+
+.th-sort {
+  color: inherit;
+  text-decoration: none;
+}
+
+.th-sort:hover {
+  color: var(--ink);
+}
+
+.attention-blocks {
+  display: grid;
+  gap: 28px;
+}
+
+.attention-blocks h3 {
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+
+.attention-note {
+  font-size: 13px;
+  margin: 0 0 10px;
+}
+
+.unit-bar-row {
+  display: grid;
+  gap: 6px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.unit-bar-row:first-child {
+  border-top: none;
+}
+
+.unit-bar-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13px;
+}
+
+.unit-bar-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-dim);
+  overflow: hidden;
+}
+
+.unit-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--green);
+}
+
+.dish-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+.dish-meta-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 

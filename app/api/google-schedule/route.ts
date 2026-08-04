@@ -90,7 +90,7 @@ async function getAuthorizedClient(): Promise<{
   }
 
   if (
-    !["owner", "accountant"].includes(profile.role)
+    !["owner", "accountant", "manager"].includes(profile.role)
   ) {
     return {
       supabase,

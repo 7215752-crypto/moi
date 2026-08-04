@@ -256,30 +256,19 @@ export default async function DashboardPage() {
             </div>
 
             <div className="portal-card-footer">
-              {currentPeriod ? (
-                <Link
-                  href={`/payroll/${currentPeriod.id}`}
-                  className="portal-link has-tooltip"
-                  data-tooltip="Откроет расчёт сотрудников за последний период."
-                  title="Открыть последний расчётный период"
-                >
-                  Перейти к расчёту
-                </Link>
-              ) : (
-                <a
-                  href="#payroll-periods"
-                  className="portal-link has-tooltip"
-                  data-tooltip="Покажет список расчётных периодов."
-                  title="Посмотреть расчётные периоды"
-                >
-                  Расчётные периоды
-                </a>
-              )}
+              <Link
+                href="/employees"
+                className="portal-link has-tooltip"
+                data-tooltip="Список периодов: импорт, расчёт и сервисный сбор внутри периода."
+                title="Открыть расчёт зарплаты"
+              >
+                Перейти к расчёту
+              </Link>
             </div>
           </article>
 
           <article
-            className="portal-section-card"
+            className="portal-section-card active"
             id="analytics"
           >
             <div className="portal-card-top">
@@ -288,7 +277,7 @@ export default async function DashboardPage() {
               </span>
 
               <span className="portal-status">
-                Скоро
+                Активно
               </span>
             </div>
 
@@ -296,28 +285,28 @@ export default async function DashboardPage() {
               <h2>Аналитика</h2>
 
               <p>
-                Быстрый просмотр продаж,
-                прибыльности и эффективности
-                товаров по ресторанам.
+                Продажи блюд из iiko: лидеры и
+                слабые позиции, допродажи
+                модификаторами, фудкост и
+                скорость отдачи.
               </p>
 
               <ul className="portal-card-points">
-                <li>Продажи товаров</li>
-                <li>Выручка и валовая прибыль</li>
-                <li>Лидеры и слабые позиции</li>
+                <li>ABC-анализ блюд</li>
+                <li>Выручка и фудкост</li>
+                <li>Карточка блюда с техкартой</li>
               </ul>
             </div>
 
             <div className="portal-card-footer">
-              <button
-                type="button"
-                disabled
-                className="portal-disabled-button has-tooltip"
-                data-tooltip="Товарную аналитику подключим после модуля зарплаты."
-                title="Раздел будет подключён позже"
+              <Link
+                href="/analytics"
+                className="portal-link has-tooltip"
+                data-tooltip="Продажи по блюдам за период с ABC-анализом."
+                title="Открыть товарную аналитику"
               >
                 Открыть аналитику
-              </button>
+              </Link>
             </div>
           </article>
 

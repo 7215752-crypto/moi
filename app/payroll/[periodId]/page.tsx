@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { StatusBadge } from "@/components/status-badge";
 import { PayoutCheckbox } from "@/components/payout-checkbox";
+import { PeriodTabs } from "@/components/period-tabs";
 import { RecalcButton } from "@/components/recalc-button";
 import { requireUser } from "@/lib/auth";
 import { formatAmountCell, formatDate, formatMoneyWhole } from "@/lib/format";
@@ -463,6 +464,8 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
           )}
         </section>
 
+        <PeriodTabs periodId={periodId} />
+
         <section className="metric-grid four">
           <article className="metric-card accent">
             <span>Начислено сотрудникам</span>
@@ -713,7 +716,7 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
                         {" "}
                         <Link
                           className="portal-link"
-                          href={`/admin/service-charge?period=${periodId}&unit=${row.business_unit_id}`}
+                          href={`/payroll/${periodId}/service-charge?unit=${row.business_unit_id}`}
                           title="Открыть распределение сервисного сбора"
                         >
                           распределить →

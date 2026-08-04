@@ -44,7 +44,7 @@ export function SiteHeader({
         pathname.startsWith("/planning"),
     },
     {
-      href: "/dashboard#payroll-periods",
+      href: "/employees",
       label: "Сотрудники",
       active:
         pathname.startsWith("/payroll") ||
