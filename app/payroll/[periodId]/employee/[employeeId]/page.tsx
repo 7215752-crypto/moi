@@ -56,11 +56,19 @@ type ShiftDay = {
   status: "ok" | "late" | "missed" | "extra";
 };
 
-// Времена iiko хранятся «как есть» (без пояса): берём чч:мм прямо из строки.
+// В базе моменты времени хранятся в UTC — показываем в московском поясе,
+// как их видит iiko и менеджер на точке.
 function clockFromTimestamp(value: string | null): string | null {
   if (!value) return null;
-  const clock = value.substring(11, 16);
-  return /^\d{2}:\d{2}$/.test(clock) ? clock : null;
+  const iso = value.replace(" ", "T").replace(/\+00(:00)?$/, "Z");
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Europe/Moscow",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
 }
 
 function clockFromTime(value: string | null): string | null {
