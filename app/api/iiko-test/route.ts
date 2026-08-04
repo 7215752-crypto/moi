@@ -39,7 +39,7 @@ export async function GET() {
   try {
     const token = await getIikoAccessToken();
 
-    const organizations = await iikoRequest("/organizations", {
+    const organizations = await iikoRequest("/api/1/organizations", {
       returnAdditionalInfo: true,
       includeDisabled: false,
     });

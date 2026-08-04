@@ -1,4 +1,4 @@
-const IIKO_API_BASE = "https://api-ru.iiko.services/api/v2";
+const IIKO_API_BASE = "https://api-ru.iiko.services";
 
 type IikoTokenResponse = {
   token?: string;
@@ -16,7 +16,7 @@ export async function getIikoAccessToken(): Promise<string> {
     );
   }
 
-  const response = await fetch(`${IIKO_API_BASE}/access_token`, {
+  const response = await fetch(`${IIKO_API_BASE}/api/v2/access_token`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ appId, apiKey, clientSecret }),
