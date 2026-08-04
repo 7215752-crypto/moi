@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { markPaid, unmarkPaid } from "@/app/payroll/actions";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, formatMoneyWhole } from "@/lib/format";
 
 type PayoutInfo = {
   amount_paid: number | string;
@@ -53,14 +53,14 @@ export function PayoutCheckbox({
         >
           ✓ выплачено
         </span>
-        {diff !== 0 && (
+        {Math.round(diff) !== 0 && (
           <span
             className={`paid-diff ${diff > 0 ? "underpaid" : "overpaid"}`}
             title="После выплаты расчёт изменился"
           >
             {diff > 0
-              ? `доплата ${formatMoney(diff)}`
-              : `переплата ${formatMoney(-diff)}`}
+              ? `доплата ${formatMoneyWhole(diff)}`
+              : `переплата ${formatMoneyWhole(-diff)}`}
           </span>
         )}
         {canUnmark && (

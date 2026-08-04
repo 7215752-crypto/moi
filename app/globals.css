@@ -1792,12 +1792,38 @@ h3 {
 
 .payroll-table.pivot th,
 .payroll-table.pivot td {
-  padding: 10px 11px;
+  padding: 9px 11px;
   white-space: nowrap;
 }
 
 .payroll-table.pivot td {
   font-size: 13px;
+}
+
+.payroll-table.pivot .numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+.th-label {
+  display: block;
+}
+
+.th-source {
+  display: block;
+  margin-top: 2px;
+  color: #97a8b5;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.neg {
+  color: #a8412a;
+}
+
+.total-cell {
+  font-weight: 800;
 }
 
 .payroll-table.pivot tfoot td {
@@ -1867,11 +1893,11 @@ h3 {
 }
 
 .payout-mark {
-  min-height: 32px;
-  padding: 0 13px;
-  color: white;
-  background: var(--brand);
-  border: 0;
+  min-height: 30px;
+  padding: 0 12px;
+  color: var(--brand-dark);
+  background: white;
+  border: 1px solid #cfd9e1;
   border-radius: 9px;
   cursor: pointer;
   font-size: 12px;
@@ -1879,11 +1905,13 @@ h3 {
 }
 
 .payout-mark:hover {
-  background: var(--brand-dark);
+  background: var(--brand-soft);
+  border-color: var(--brand);
 }
 
 .payout-mark:disabled {
-  background: #aeb8c4;
+  color: #aeb8c4;
+  background: var(--surface);
   cursor: not-allowed;
 }
 
@@ -1939,6 +1967,12 @@ h3 {
   background: #aeb8c4;
   cursor: not-allowed;
   box-shadow: none;
+}
+
+.recalc-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .recalc-message {

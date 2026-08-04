@@ -5,7 +5,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { PayoutCheckbox } from "@/components/payout-checkbox";
 import { RecalcButton } from "@/components/recalc-button";
 import { requireUser } from "@/lib/auth";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatAmountCell, formatDate, formatMoneyWhole } from "@/lib/format";
 
 type Props = {
   params: Promise<{ periodId: string }>;
@@ -62,16 +62,77 @@ type UnitGroup = {
 };
 
 // Колонки — как в Google-файле «ЗП»: каждой колонке соответствуют типы строк расчёта.
-const COMPONENT_COLUMNS: Array<{ key: string; label: string; types: string[] }> = [
-  { key: "base", label: "По ставке", types: ["hourly_pay", "shift_pay", "monthly_pay"] },
-  { key: "motivation", label: "% от продаж", types: ["iiko_motivation"] },
-  { key: "fixed", label: "Фикс блюда", types: ["iiko_fixed_bonus"] },
-  { key: "service", label: "Сервисный", types: ["service_charge"] },
-  { key: "bonus", label: "Премии", types: ["tg_bonus"] },
-  { key: "fine", label: "Штрафы", types: ["fine"] },
-  { key: "purchase", label: "Покупки", types: ["purchase"] },
-  { key: "inventory", label: "Официалка", types: ["official_inventory"] },
-  { key: "leader", label: "Шифт-лидер", types: ["leader_kpi"] },
+// source — короткая подпись под названием колонки, hint — полное пояснение в тултипе.
+const COMPONENT_COLUMNS: Array<{
+  key: string;
+  label: string;
+  source: string;
+  hint: string;
+  types: string[];
+}> = [
+  {
+    key: "base",
+    label: "По ставке",
+    source: "часы × ставка",
+    hint: "Начислено за отработанные часы, смены или месячный оклад",
+    types: ["hourly_pay", "shift_pay", "monthly_pay"],
+  },
+  {
+    key: "motivation",
+    label: "% от продаж",
+    source: "бонусы iiko",
+    hint: "Процент от продаж — готовые бонусы из iiko (счёт «Зарплата»)",
+    types: ["iiko_motivation"],
+  },
+  {
+    key: "fixed",
+    label: "Фикс блюда",
+    source: "бонусы iiko",
+    hint: "Фиксированные бонусы за блюда из iiko",
+    types: ["iiko_fixed_bonus"],
+  },
+  {
+    key: "service",
+    label: "Сервисный",
+    source: "чеки iiko",
+    hint: "Сервисный сбор из чеков iiko — распределяет менеджер",
+    types: ["service_charge"],
+  },
+  {
+    key: "bonus",
+    label: "Премии",
+    source: "вручную",
+    hint: "Премии — вводятся вручную с комментарием",
+    types: ["tg_bonus"],
+  },
+  {
+    key: "fine",
+    label: "Штрафы",
+    source: "вручную",
+    hint: "Депремирования — вводятся вручную с комментарием",
+    types: ["fine"],
+  },
+  {
+    key: "purchase",
+    label: "Покупки",
+    source: "накладные iiko",
+    hint: "Покупки в счёт зарплаты — расходные накладные iiko на сотрудника",
+    types: ["purchase"],
+  },
+  {
+    key: "inventory",
+    label: "Официалка",
+    source: "вручную",
+    hint: "Официальная часть и инвентаризация — вводятся вручную",
+    types: ["official_inventory"],
+  },
+  {
+    key: "leader",
+    label: "Шифт-лидер",
+    source: "график смен",
+    hint: "Бонус за подтверждённые шифт-лидерские смены из графика",
+    types: ["leader_kpi"],
+  },
 ];
 
 const KNOWN_TYPES = new Set(COMPONENT_COLUMNS.flatMap((column) => column.types));
@@ -263,7 +324,16 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
   }
 
   const columns = hasOtherColumn
-    ? [...COMPONENT_COLUMNS, { key: "other", label: "Прочее", types: [] }]
+    ? [
+        ...COMPONENT_COLUMNS,
+        {
+          key: "other",
+          label: "Прочее",
+          source: "разное",
+          hint: "Строки расчёта, не попавшие в основные колонки",
+          types: [],
+        },
+      ]
     : COMPONENT_COLUMNS;
 
   const allGroups: UnitGroup[] = Array.from(rowsByUnit.entries())
@@ -378,19 +448,23 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
         <section className="metric-grid four">
           <article className="metric-card accent">
             <span>Начислено сотрудникам</span>
-            <strong className="metric-money">{formatMoney(employeeTotal)}</strong>
+            <strong className="metric-money">
+              {formatMoneyWhole(employeeTotal)}
+            </strong>
             <small>{totalPeople} сотрудников по ресторанам</small>
           </article>
           <article className="metric-card">
             <span>Выплачено</span>
-            <strong className="metric-money">{formatMoney(paidTotal)}</strong>
+            <strong className="metric-money">{formatMoneyWhole(paidTotal)}</strong>
             <small>
               {paidPeople} из {totalPeople} с отметкой «выплачено»
             </small>
           </article>
           <article className="metric-card">
             <span>Осталось выдать</span>
-            <strong className="metric-money">{formatMoney(remainingTotal)}</strong>
+            <strong className="metric-money">
+              {formatMoneyWhole(remainingTotal)}
+            </strong>
             <small>Строки без отметки «выплачено»</small>
           </article>
           <article className="metric-card">
@@ -409,8 +483,8 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
             <div>
               <h2>Расчёт по ресторанам</h2>
               <p>
-                Колонки — как в файле ЗП. Нажмите на сотрудника, чтобы открыть
-                расшифровку и смены.
+                Под названием каждой колонки — откуда берутся цифры. Суммы в
+                рублях без копеек; точный расчёт — в карточке сотрудника.
               </p>
             </div>
             <form className="filter-form" method="get">
@@ -445,24 +519,47 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
                         версия {group.version ?? "—"} · выплачено{" "}
                         {group.paidCount} из {group.rows.length}
                         {group.remaining > 0 &&
-                          ` · осталось ${formatMoney(group.remaining)}`}
+                          ` · осталось ${formatMoneyWhole(group.remaining)}`}
                       </span>
                     </div>
-                    <strong>{formatMoney(group.total)}</strong>
+                    <strong>{formatMoneyWhole(group.total)}</strong>
                   </div>
                   <div className="payroll-table-wrap scrollable">
                     <table className="payroll-table pivot">
                       <thead>
                         <tr>
-                          <th>Сотрудник</th>
-                          <th className="numeric">Часы</th>
+                          <th>
+                            <span className="th-label">Сотрудник</span>
+                            <span className="th-source">и его ставка</span>
+                          </th>
+                          <th
+                            className="numeric"
+                            title="Фактически отработанные часы из явок iiko"
+                          >
+                            <span className="th-label">Часы</span>
+                            <span className="th-source">явки iiko</span>
+                          </th>
                           {columns.map((column) => (
-                            <th className="numeric" key={column.key}>
-                              {column.label}
+                            <th
+                              className="numeric"
+                              key={column.key}
+                              title={column.hint}
+                            >
+                              <span className="th-label">{column.label}</span>
+                              <span className="th-source">{column.source}</span>
                             </th>
                           ))}
-                          <th className="numeric">К выдаче</th>
-                          <th>Выплата</th>
+                          <th
+                            className="numeric"
+                            title="Сумма всех начислений и удержаний"
+                          >
+                            <span className="th-label">К выдаче</span>
+                            <span className="th-source">итог, ₽</span>
+                          </th>
+                          <th title="Отметка о выдаче денег — защита от двойной выплаты">
+                            <span className="th-label">Выплата</span>
+                            <span className="th-source">отметка</span>
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -482,33 +579,41 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
                               ) : (
                                 <strong>{row.name}</strong>
                               )}
-                              <small className="rate-hint">
-                                {row.rateLabel ??
-                                  (row.hours > 0 ? "нет ставки" : "—")}
-                              </small>
+                              {row.rateLabel && (
+                                <small className="rate-hint">
+                                  {row.rateLabel}
+                                </small>
+                              )}
                             </td>
                             <td className="numeric">
-                              {row.hours > 0 ? formatHours(row.hours) : "—"}
+                              {row.hours > 0 ? formatHours(row.hours) : ""}
                             </td>
                             {columns.map((column) => {
-                              const value = row.components[column.key] ?? 0;
+                              const value = Math.round(
+                                row.components[column.key] ?? 0,
+                              );
                               const isBase = column.key === "base";
                               return (
-                                <td className="numeric" key={column.key}>
-                                  {value !== 0 ? (
-                                    formatMoney(value)
-                                  ) : isBase && row.hours > 0 && !row.hasRate ? (
-                                    <span className="warn-badge">нет ставки</span>
-                                  ) : (
-                                    <span className="dim">—</span>
-                                  )}
+                                <td
+                                  className={`numeric ${value < 0 ? "neg" : ""}`}
+                                  key={column.key}
+                                >
+                                  {value !== 0
+                                    ? formatAmountCell(value)
+                                    : isBase && row.hours > 0 && !row.hasRate
+                                      ? (
+                                          <span className="warn-badge">
+                                            нет ставки
+                                          </span>
+                                        )
+                                      : ""}
                                 </td>
                               );
                             })}
                             <td
-                              className={`numeric money-cell ${row.total < 0 ? "negative-money" : ""}`}
+                              className={`numeric total-cell ${row.total < 0 ? "neg" : ""}`}
                             >
-                              {formatMoney(row.total)}
+                              {formatAmountCell(Math.round(row.total))}
                             </td>
                             <td className="payout-cell">
                               <PayoutCheckbox
@@ -530,15 +635,21 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
                           <td className="numeric">
                             {formatHours(group.hoursTotal)}
                           </td>
-                          {columns.map((column) => (
-                            <td className="numeric" key={column.key}>
-                              {(group.columnTotals[column.key] ?? 0) !== 0
-                                ? formatMoney(group.columnTotals[column.key])
-                                : "—"}
-                            </td>
-                          ))}
-                          <td className="numeric money-cell">
-                            {formatMoney(group.total)}
+                          {columns.map((column) => {
+                            const value = Math.round(
+                              group.columnTotals[column.key] ?? 0,
+                            );
+                            return (
+                              <td
+                                className={`numeric ${value < 0 ? "neg" : ""}`}
+                                key={column.key}
+                              >
+                                {value !== 0 ? formatAmountCell(value) : ""}
+                              </td>
+                            );
+                          })}
+                          <td className="numeric total-cell">
+                            {formatAmountCell(Math.round(group.total))}
                           </td>
                           <td />
                         </tr>
@@ -563,7 +674,7 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
               {miscRows.map((row, index) => (
                 <div key={`${row.description}-${index}`}>
                   <span>{row.description}</span>
-                  <strong>{formatMoney(row.amount)}</strong>
+                  <strong>{formatMoneyWhole(row.amount)}</strong>
                 </div>
               ))}
             </div>

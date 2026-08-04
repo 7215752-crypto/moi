@@ -2,7 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { requireUser } from "@/lib/auth";
-import { formatDate, formatMoney, humanizeComponent } from "@/lib/format";
+import {
+  formatDate,
+  formatMoney,
+  humanizeComponent,
+  humanizeSource,
+} from "@/lib/format";
 
 function formatDayLabel(value: string): string {
   return new Intl.DateTimeFormat("ru-RU", {
@@ -278,7 +283,7 @@ export default async function EmployeePayrollPage({ params, searchParams }: Prop
                     <div className="breakdown-main">
                       <strong>{humanizeComponent(line.component_type)}</strong>
                       <p>{line.description}</p>
-                      <small>Источник: {line.source_table ?? "ручной ввод"}</small>
+                      <small>Источник: {humanizeSource(line.source_table)}</small>
                     </div>
                     <strong className={amount < 0 ? "negative-money" : "positive-money"}>
                       {amount < 0 ? "−" : "+"}

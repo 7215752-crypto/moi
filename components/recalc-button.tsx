@@ -84,6 +84,9 @@ export function RecalcButton({ from, to }: Props) {
       >
         {busy ? "Считаем…" : "Рассчитать зарплату"}
       </button>
+      {!message && (
+        <p className="recalc-hint">обновит данные из iiko за период</p>
+      )}
       {message && (
         <p className={`recalc-message ${isError ? "error" : ""}`}>{message}</p>
       )}

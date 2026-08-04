@@ -24,6 +24,40 @@ export function formatShortDate(value: string) {
   }).format(new Date(`${value}T00:00:00`));
 }
 
+// Целые рубли для сводных таблиц: «52 957 ₽» (точные суммы — в расшифровке).
+export function formatMoneyWhole(value: number | string | null | undefined) {
+  const numeric = Number(value ?? 0);
+  return new Intl.NumberFormat("ru-RU", {
+    style: "currency",
+    currency: "RUB",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(numeric);
+}
+
+// Число без символа валюты для ячеек таблицы: «52 957», «−8 189».
+export function formatAmountCell(value: number) {
+  return new Intl.NumberFormat("ru-RU", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+export function humanizeSource(source: string | null | undefined) {
+  if (!source) return "ручной ввод";
+  const names: Record<string, string> = {
+    attendance_records: "явки iiko",
+    iiko_motivation_records: "бонусы iiko",
+    manual_adjustments: "корректировка",
+    planned_shifts: "график смен",
+    leader_shifts: "шифт-лидерские смены",
+    worked_shift_records: "смены iiko",
+    payroll_misc_items: "прочие расходы периода",
+    employee_rates: "ставки",
+  };
+  return names[source] ?? source;
+}
+
 export function humanizeComponent(type: string) {
   const names: Record<string, string> = {
     hourly_pay: "Почасовая оплата",
