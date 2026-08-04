@@ -41,6 +41,7 @@ type EmployeeRow = {
   employeeId: string;
   name: string;
   hours: number;
+  leaderShifts: number;
   components: Record<string, number>;
   total: number;
   payout: Payout | null;
@@ -130,7 +131,7 @@ const COMPONENT_COLUMNS: Array<{
     key: "leader",
     label: "Шифт-лидер",
     source: "график смен",
-    hint: "Бонус за подтверждённые шифт-лидерские смены из графика",
+    hint: "Смены шифт-лидера из графика — пока показываем количеством, без начислений",
     types: ["leader_kpi"],
   },
 ];
@@ -233,6 +234,14 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
       .eq("payroll_period_id", periodId),
   ]);
 
+  // Шифт-лидерские смены из графика — показываем количеством (без начислений).
+  const leaderShiftsResult = await supabase
+    .from("planned_shifts")
+    .select("employee_id, business_unit_id")
+    .eq("is_shift_leader", true)
+    .gte("shift_date", period.date_from)
+    .lte("shift_date", period.date_to);
+
   // Версия расчёта — последняя по каждому ресторану (а не по периоду в целом).
   const latestRunByUnit = new Map<string, { id: string; version: number }>();
   for (const run of runsResult.data ?? []) {
@@ -296,6 +305,7 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
         employeeId,
         name: employeeNameById.get(employeeId) ?? "Без имени",
         hours: 0,
+        leaderShifts: 0,
         components: {},
         total: 0,
         payout: payoutByKey.get(`${unitId}|${employeeId}`) ?? null,
@@ -321,6 +331,14 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
   for (const record of attendanceResult.data ?? []) {
     const row = ensureRow(record.business_unit_id, record.employee_id);
     row.hours += Number(record.hours ?? 0);
+  }
+
+  // Количество лидерских смен — только для уже существующих строк (кто работал).
+  for (const shift of leaderShiftsResult.data ?? []) {
+    const row = rowsByUnit
+      .get(shift.business_unit_id)
+      ?.get(shift.employee_id);
+    if (row) row.leaderShifts += 1;
   }
 
   const columns = hasOtherColumn
@@ -593,6 +611,7 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
                                 row.components[column.key] ?? 0,
                               );
                               const isBase = column.key === "base";
+                              const isLeader = column.key === "leader";
                               return (
                                 <td
                                   className={`numeric ${value < 0 ? "neg" : ""}`}
@@ -606,7 +625,21 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
                                             нет ставки
                                           </span>
                                         )
-                                      : ""}
+                                      : isLeader && row.leaderShifts > 0
+                                        ? (
+                                            <span
+                                              className="dim"
+                                              title="Смены шифт-лидера по графику (количество, без начислений)"
+                                            >
+                                              {row.leaderShifts}{" "}
+                                              {row.leaderShifts === 1
+                                                ? "смена"
+                                                : row.leaderShifts < 5
+                                                  ? "смены"
+                                                  : "смен"}
+                                            </span>
+                                          )
+                                        : ""}
                                 </td>
                               );
                             })}
