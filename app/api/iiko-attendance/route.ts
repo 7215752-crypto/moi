@@ -126,6 +126,7 @@ type PreparedImport = {
     source_system: string;
     external_record_id: string;
   }>;
+  shiftRateEmployeeIds: string[];
 };
 
 async function prepareImport(
@@ -450,6 +451,20 @@ async function prepareImport(
     external_record_id: `${row.work_date}:${row.employee_id}`,
   }));
 
+  // Сотрудники со ставкой «за смену»: их день с явкой станет одной сменой.
+  const shiftRateEmployeeIds = Array.from(
+    new Set(
+      (rates ?? [])
+        .filter(
+          (rate) =>
+            rate.rate_type === "shift" &&
+            rate.valid_from <= to &&
+            (rate.valid_to === null || rate.valid_to >= from),
+        )
+        .map((rate) => rate.employee_id as string),
+    ),
+  );
+
   return {
     totalSourceRecords: iikoAttendances.length,
     typeBreakdown,
@@ -465,6 +480,7 @@ async function prepareImport(
     newAliasRows,
     summaryRows,
     attendanceRows,
+    shiftRateEmployeeIds,
   };
 }
 
@@ -625,6 +641,40 @@ export async function POST(request: NextRequest) {
         .insert(chunk);
       if (insertError) {
         throw new Error(`Запись явок: ${insertError.message}`);
+      }
+    }
+
+    // Для сотрудников со ставкой «за смену» день с явкой считается одной сменой.
+    const shiftEmployeeSet = new Set(prepared.shiftRateEmployeeIds);
+    const shiftRows = prepared.attendanceRows
+      .filter((row) => shiftEmployeeSet.has(row.employee_id))
+      .map((row) => ({
+        payroll_period_id: periodId,
+        employee_id: row.employee_id,
+        business_unit_id: row.business_unit_id,
+        department_id: row.department_id,
+        work_date: row.work_date,
+        shift_count: 1,
+        source_system: "iiko",
+        external_record_id: row.external_record_id,
+      }));
+
+    const { error: deleteShiftsError } = await supabase
+      .from("worked_shift_records")
+      .delete()
+      .eq("payroll_period_id", periodId)
+      .eq("source_system", "iiko");
+
+    if (deleteShiftsError) {
+      throw new Error(`Очистка старых смен: ${deleteShiftsError.message}`);
+    }
+
+    for (const chunk of splitIntoChunks(shiftRows, 200)) {
+      const { error: insertShiftsError } = await supabase
+        .from("worked_shift_records")
+        .insert(chunk);
+      if (insertShiftsError) {
+        throw new Error(`Запись смен: ${insertShiftsError.message}`);
       }
     }
 
