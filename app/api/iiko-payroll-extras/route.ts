@@ -405,15 +405,43 @@ export async function POST(request: NextRequest) {
         throw new Error(`Запись покупок: ${insertPurchasesError.message}`);
     }
 
+    // Уже распределённое менеджером вычитаем — в «прочих расходах» остаётся только остаток.
+    const { data: splitRows, error: splitError } = await supabase
+      .from("manual_adjustments")
+      .select("business_unit_id, amount")
+      .eq("payroll_period_id", periodId)
+      .eq("source_system", "service_split");
+    if (splitError)
+      throw new Error(`Распределение сбора: ${splitError.message}`);
+
+    const distributedByBu = new Map<string, number>();
+    for (const row of splitRows ?? []) {
+      if (!row.business_unit_id) continue;
+      distributedByBu.set(
+        row.business_unit_id,
+        (distributedByBu.get(row.business_unit_id) ?? 0) + Number(row.amount),
+      );
+    }
+
     const miscRows = prepared.serviceCharges
       .filter((row) => row.business_unit_id)
+      .map((row) => {
+        const remainder =
+          Math.round(
+            (row.amount -
+              (distributedByBu.get(row.business_unit_id as string) ?? 0)) *
+              100,
+          ) / 100;
+        return { ...row, remainder };
+      })
+      .filter((row) => row.remainder > 0.005)
       .map((row) => ({
         payroll_period_id: periodId,
         business_unit_id: row.business_unit_id,
         item_date: period.to,
         item_type: "service_charge",
         description: `Сервисный сбор из чеков (${row.business_unit_name}) — к распределению менеджером`,
-        amount: row.amount,
+        amount: row.remainder,
         source_system: "iiko_olap",
         external_record_id: `olap-service:${row.business_unit_id}`,
       }));

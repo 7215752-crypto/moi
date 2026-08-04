@@ -117,6 +117,74 @@ export async function fetchServiceCharges(
   }));
 }
 
+export type ServiceChargeReceipt = {
+  departmentName: string;
+  date: string;
+  sessionNum: number | null;
+  orderNum: number | null;
+  waiterName: string;
+  amount: number;
+};
+
+// Расшифровка сервисного сбора по чекам (дата, смена, № чека, официант, сумма).
+export async function fetchServiceChargeReceipts(
+  from: string,
+  to: string,
+): Promise<ServiceChargeReceipt[]> {
+  // Сначала выясняем точные названия надбавок «Сервисное обслуживание…»
+  const types = await runAndParse({
+    reportType: "SALES",
+    buildSummary: "false",
+    groupByRowFields: ["ItemSaleEventDiscountType"],
+    aggregateFields: ["IncreaseSum"],
+    filters: dateFilter("OpenDate.Typed", from, to),
+  });
+
+  const serviceTypes = types
+    .map((row) => String(row["ItemSaleEventDiscountType"] ?? ""))
+    .filter((type) => type.toLowerCase().includes("сервисное обслуживание"));
+
+  if (serviceTypes.length === 0) return [];
+
+  const rows = await runAndParse({
+    reportType: "SALES",
+    buildSummary: "false",
+    groupByRowFields: [
+      "Department",
+      "OpenDate.Typed",
+      "SessionNum",
+      "OrderNum",
+      "OrderWaiter.Name",
+    ],
+    aggregateFields: ["IncreaseSum"],
+    filters: {
+      ...dateFilter("OpenDate.Typed", from, to),
+      ItemSaleEventDiscountType: {
+        filterType: "IncludeValues",
+        values: serviceTypes,
+      },
+    },
+  });
+
+  return rows
+    .map((row) => ({
+      departmentName: String(row["Department"] ?? "").trim(),
+      date: String(row["OpenDate.Typed"] ?? "").substring(0, 10),
+      sessionNum:
+        row["SessionNum"] === null || row["SessionNum"] === undefined
+          ? null
+          : Number(row["SessionNum"]),
+      orderNum:
+        row["OrderNum"] === null || row["OrderNum"] === undefined
+          ? null
+          : Number(row["OrderNum"]),
+      waiterName: String(row["OrderWaiter.Name"] ?? "").trim(),
+      amount: Math.round(Number(row["IncreaseSum"] ?? 0) * 100) / 100,
+    }))
+    .filter((row) => row.departmentName && row.amount > 0)
+    .sort((a, b) => a.date.localeCompare(b.date) || (a.orderNum ?? 0) - (b.orderNum ?? 0));
+}
+
 // Продажи по официантам (для KPI/аналитики и сверки).
 export async function fetchSalesByWaiter(
   from: string,

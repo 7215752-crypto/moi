@@ -229,7 +229,7 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
       .or(`valid_to.is.null,valid_to.gte.${period.date_from}`),
     supabase
       .from("payroll_misc_items")
-      .select("business_unit_id, amount, description")
+      .select("business_unit_id, amount, description, item_type")
       .eq("payroll_period_id", periodId),
   ]);
 
@@ -673,7 +673,21 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
             <div className="misc-list">
               {miscRows.map((row, index) => (
                 <div key={`${row.description}-${index}`}>
-                  <span>{row.description}</span>
+                  <span>
+                    {row.description}
+                    {row.item_type === "service_charge" && row.business_unit_id ? (
+                      <>
+                        {" "}
+                        <Link
+                          className="portal-link"
+                          href={`/admin/service-charge?period=${periodId}&unit=${row.business_unit_id}`}
+                          title="Открыть распределение сервисного сбора"
+                        >
+                          распределить →
+                        </Link>
+                      </>
+                    ) : null}
+                  </span>
                   <strong>{formatMoneyWhole(row.amount)}</strong>
                 </div>
               ))}
