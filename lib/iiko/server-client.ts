@@ -20,10 +20,14 @@ async function withIikoServerSession<T>(
 
   const passHash = sha1(password);
 
-  const authResponse = await fetch(
-    `${IIKO_SERVER_BASE}/auth?login=${encodeURIComponent(login)}&pass=${passHash}`,
-    { method: "POST", cache: "no-store" },
-  );
+  const authBody = new URLSearchParams({ login, pass: passHash });
+
+  const authResponse = await fetch(`${IIKO_SERVER_BASE}/auth`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: authBody.toString(),
+    cache: "no-store",
+  });
 
   const token = (await authResponse.text()).trim();
 
