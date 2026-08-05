@@ -670,10 +670,20 @@ export async function POST(
           shift.business_unit_code,
         ).toUpperCase();
 
+      // Пометка «бар» в тексте ячейки («м15-02барл») переводит смену в бар,
+      // даже если строка сотрудника стоит в секции «Зал» листа.
+      const sectionCode = String(
+        shift.department_code,
+      ).toUpperCase();
+
       const departmentCode =
-        String(
-          shift.department_code,
-        ).toUpperCase();
+        (sectionCode === "HALL" ||
+          sectionCode === "BAR") &&
+        normalizeName(
+          shift.shift_text,
+        ).includes("бар")
+          ? "BAR"
+          : sectionCode;
 
       const businessUnitId =
         businessUnitMap.get(
