@@ -31,9 +31,12 @@ export async function updateSession(request: NextRequest) {
   const isAuthenticated = Boolean(data.user);
   const pathname = request.nextUrl.pathname;
   const isLoginPage = pathname.startsWith("/login");
+  // Страница установки пароля по приглашению: токены приходят в #hash,
+  // сессии в cookie ещё нет — пускаем без авторизации.
+  const isSetPasswordPage = pathname.startsWith("/auth/set-password");
   const isPublicAsset = pathname.startsWith("/_next") || pathname === "/favicon.ico";
 
-  if (!isAuthenticated && !isLoginPage && !isPublicAsset) {
+  if (!isAuthenticated && !isLoginPage && !isSetPasswordPage && !isPublicAsset) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);

@@ -1,4 +1,5 @@
 import { LoginForm } from "@/components/login-form";
+import { InviteHashCatcher } from "@/components/invite-hash-catcher";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export default async function LoginPage({ searchParams }: Props) {
 
   return (
     <main className="login-shell">
+      <InviteHashCatcher />
       <section className="login-brand-panel">
         <div className="brand-mark">M</div>
         <p className="eyebrow light">MOI GROUP</p>
