@@ -222,6 +222,26 @@ function normalizeName(
     .trim();
 }
 
+// Ключ без учёта порядка слов: «Наталья Казарина» = «Казарина Наталья».
+function sortedNameKey(
+  value: string | null | undefined,
+): string {
+  return normalizeName(value)
+    .split(" ")
+    .sort()
+    .join(" ");
+}
+
+function lookupEmployee(
+  employeeMap: Map<string, string>,
+  name: string | null | undefined,
+): string | undefined {
+  return (
+    employeeMap.get(normalizeName(name)) ??
+    employeeMap.get(sortedNameKey(name))
+  );
+}
+
 async function loadEmployeeMap(
   supabase: SupabaseServerClient,
 ): Promise<Map<string, string>> {
@@ -255,39 +275,39 @@ async function loadEmployeeMap(
   }
 
   const employeeMap = new Map<string, string>();
+  const ambiguousKeys = new Set<string>();
+
+  // Первый владелец ключа выигрывает; ключ, указывающий на разных
+  // сотрудников, становится неоднозначным и убирается совсем.
+  const addKey = (
+    key: string,
+    employeeId: string,
+  ) => {
+    if (!key || ambiguousKeys.has(key)) return;
+    const existing = employeeMap.get(key);
+    if (existing === undefined) {
+      employeeMap.set(key, employeeId);
+    } else if (existing !== employeeId) {
+      employeeMap.delete(key);
+      ambiguousKeys.add(key);
+    }
+  };
+
+  const addName = (
+    value: string | null | undefined,
+    employeeId: string,
+  ) => {
+    addKey(normalizeName(value), employeeId);
+    addKey(sortedNameKey(value), employeeId);
+  };
 
   for (const employee of employees ?? []) {
-    const key = normalizeName(
-      employee.full_name,
-    );
-
-    if (key) {
-      employeeMap.set(key, employee.id);
-    }
+    addName(employee.full_name, employee.id);
   }
 
   for (const alias of aliases ?? []) {
-    const externalKey = normalizeName(
-      alias.external_key,
-    );
-
-    const sourceName = normalizeName(
-      alias.source_name,
-    );
-
-    if (externalKey) {
-      employeeMap.set(
-        externalKey,
-        alias.employee_id,
-      );
-    }
-
-    if (sourceName) {
-      employeeMap.set(
-        sourceName,
-        alias.employee_id,
-      );
-    }
+    addName(alias.external_key, alias.employee_id);
+    addName(alias.source_name, alias.employee_id);
   }
 
   return employeeMap;
@@ -317,7 +337,12 @@ function buildEmployeeReport(
 
     uniqueScheduleNames.add(normalizedName);
 
-    if (employeeMap.has(normalizedName)) {
+    if (
+      lookupEmployee(
+        employeeMap,
+        shift.employee_name,
+      ) !== undefined
+    ) {
       matchedShiftCount += 1;
       continue;
     }
@@ -622,8 +647,9 @@ export async function POST(
     let missingDepartmentCount = 0;
 
     for (const shift of shifts) {
-      const employeeId = employeeMap.get(
-        normalizeName(shift.employee_name),
+      const employeeId = lookupEmployee(
+        employeeMap,
+        shift.employee_name,
       );
 
       if (!employeeId) {
