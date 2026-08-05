@@ -283,11 +283,16 @@ async function prepare(
           (row.valid_to === null || row.valid_to >= from),
       )
       .sort((a, b) => Number(b.is_primary) - Number(a.is_primary));
+    let hasOtherPosition = false;
     for (const assignment of active) {
       const position = normalizeName(assignment.position_name);
       if (position.includes("офици")) return "waiter";
       if (position.includes("бармен")) return "bartender";
+      if (position) hasOtherPosition = true;
     }
+    // Должность в портале задана и это не официант/бармен (повар, управляющий…) —
+    // процент не положен, к фолбэкам не идём.
+    if (hasOtherPosition) return null;
 
     const iikoRole = iikoRoleByEmployee.get(employeeId);
     if (iikoRole) return iikoRole;

@@ -14,7 +14,7 @@ npm run build    # next build --webpack
 npm run lint
 ```
 
-Деплой: `vercel --prod` (Vercel CLI, git не подключён). Аккаунт `7215752-2088s-projects`, проект `redman-payroll-portal`.
+Деплой: `git push` в `main` (https://github.com/7215752-crypto/moi) — Vercel собирает автоматически через GitHub App; Vercel CLI на машине нет. Перед пушем обязательно `node node_modules/typescript/bin/tsc --noEmit` (npx на этой машине нестабилен). Аккаунт `7215752-2088s-projects`, проект `redman-payroll-portal`. Рядом может работать параллельная сессия Claude: перед коммитом `git pull --rebase --autostash`, в пачку включать и её изменённые/untracked файлы (иначе деплой уронит билд или откатит прод).
 
 ## Стек
 
