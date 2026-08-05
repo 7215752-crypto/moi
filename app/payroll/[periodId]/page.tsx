@@ -2,11 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { StatusBadge } from "@/components/status-badge";
-import { PayoutCheckbox } from "@/components/payout-checkbox";
+import { PayrollTables } from "@/components/payroll-tables";
 import { PeriodTabs } from "@/components/period-tabs";
 import { RecalcButton } from "@/components/recalc-button";
 import { requireUser } from "@/lib/auth";
-import { formatAmountCell, formatDate, formatMoneyWhole } from "@/lib/format";
+import { formatDate, formatMoneyWhole } from "@/lib/format";
 
 type Props = {
   params: Promise<{ periodId: string }>;
@@ -43,6 +43,7 @@ type EmployeeRow = {
   name: string;
   hours: number;
   leaderShifts: number;
+  leaderMaxSum: number;
   components: Record<string, number>;
   total: number;
   payout: Payout | null;
@@ -61,6 +62,7 @@ type UnitGroup = {
   paidCount: number;
   paidSum: number;
   remaining: number;
+  employeeCount: number;
 };
 
 // Колонки — как в Google-файле «ЗП»: каждой колонке соответствуют типы строк расчёта.
@@ -146,13 +148,6 @@ function columnKeyFor(componentType: string): string {
   return "other";
 }
 
-function formatHours(value: number): string {
-  return value.toLocaleString("ru-RU", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  });
-}
-
 function rateLabelFor(
   rates: Rate[],
   employeeId: string,
@@ -235,10 +230,11 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
       .eq("payroll_period_id", periodId),
   ]);
 
-  // Шифт-лидерские смены из графика — показываем количеством (без начислений).
+  // Шифт-лидерские смены из графика — показываем количеством и максимумом бонуса
+  // (без начислений). Дубли одной даты в графике считаем одной сменой.
   const leaderShiftsResult = await supabase
     .from("planned_shifts")
-    .select("employee_id, business_unit_id")
+    .select("employee_id, business_unit_id, shift_date, leader_shifts(maximum_bonus)")
     .eq("is_shift_leader", true)
     .gte("shift_date", period.date_from)
     .lte("shift_date", period.date_to);
@@ -307,6 +303,7 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
         name: employeeNameById.get(employeeId) ?? "Без имени",
         hours: 0,
         leaderShifts: 0,
+        leaderMaxSum: 0,
         components: {},
         total: 0,
         payout: payoutByKey.get(`${unitId}|${employeeId}`) ?? null,
@@ -334,12 +331,29 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
     row.hours += Number(record.hours ?? 0);
   }
 
-  // Количество лидерских смен — только для уже существующих строк (кто работал).
+  // Лидерские смены — только для уже существующих строк (кто работал).
+  // Один день = одна смена, даже если в графике ячейка задвоена.
+  const seenLeaderDays = new Set<string>();
   for (const shift of leaderShiftsResult.data ?? []) {
+    const dayKey = `${shift.employee_id}|${shift.business_unit_id}|${shift.shift_date}`;
+    if (seenLeaderDays.has(dayKey)) continue;
+    seenLeaderDays.add(dayKey);
+
     const row = rowsByUnit
       .get(shift.business_unit_id)
       ?.get(shift.employee_id);
-    if (row) row.leaderShifts += 1;
+    if (!row) continue;
+
+    const linked = shift.leader_shifts as
+      | { maximum_bonus: number | string }
+      | Array<{ maximum_bonus: number | string }>
+      | null;
+    const bonus = Array.isArray(linked)
+      ? Number(linked[0]?.maximum_bonus ?? 0)
+      : Number(linked?.maximum_bonus ?? 0);
+
+    row.leaderShifts += 1;
+    row.leaderMaxSum += bonus;
   }
 
   const columns = hasOtherColumn
@@ -393,6 +407,7 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
         paidCount,
         paidSum,
         remaining,
+        employeeCount: rows.length,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name, "ru"));
@@ -466,37 +481,33 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
 
         <PeriodTabs periodId={periodId} />
 
-        <section className="metric-grid four">
-          <article className="metric-card accent">
-            <span>Начислено сотрудникам</span>
-            <strong className="metric-money">
-              {formatMoneyWhole(employeeTotal)}
-            </strong>
-            <small>{totalPeople} сотрудников по ресторанам</small>
-          </article>
-          <article className="metric-card">
+        <section className="metric-strip">
+          <div>
+            <span>Начислено</span>
+            <strong>{formatMoneyWhole(employeeTotal)}</strong>
+            <small>{totalPeople} сотрудников</small>
+          </div>
+          <div>
             <span>Выплачено</span>
-            <strong className="metric-money">{formatMoneyWhole(paidTotal)}</strong>
+            <strong className="good">{formatMoneyWhole(paidTotal)}</strong>
             <small>
-              {paidPeople} из {totalPeople} с отметкой «выплачено»
+              {paidPeople} из {totalPeople}
             </small>
-          </article>
-          <article className="metric-card">
+          </div>
+          <div>
             <span>Осталось выдать</span>
-            <strong className="metric-money">
-              {formatMoneyWhole(remainingTotal)}
-            </strong>
-            <small>Строки без отметки «выплачено»</small>
-          </article>
-          <article className="metric-card">
+            <strong>{formatMoneyWhole(remainingTotal)}</strong>
+            <small>без отметки «выплачено»</small>
+          </div>
+          <div className={problems.length > 0 ? "warn" : ""}>
             <span>Контроль</span>
             <strong>{problems.length === 0 ? "Без ошибок" : "Внимание"}</strong>
             <small>
               {problems.length === 0
-                ? "Нет отрицательных сумм и часов без ставки"
+                ? "все строки в порядке"
                 : problems.join(" · ")}
             </small>
-          </article>
+          </div>
         </section>
 
         <section className="content-card">
@@ -530,171 +541,17 @@ export default async function PayrollPeriodPage({ params, searchParams }: Props)
               чтобы забрать явки из iiko.
             </div>
           ) : (
-            <div className="unit-groups">
-              {groups.map((group) => (
-                <section className="unit-section" key={group.id}>
-                  <div className="unit-heading">
-                    <div>
-                      <h3>{group.name}</h3>
-                      <span>
-                        версия {group.version ?? "—"} · выплачено{" "}
-                        {group.paidCount} из {group.rows.length}
-                        {group.remaining > 0 &&
-                          ` · осталось ${formatMoneyWhole(group.remaining)}`}
-                      </span>
-                    </div>
-                    <strong>{formatMoneyWhole(group.total)}</strong>
-                  </div>
-                  <div className="payroll-table-wrap scrollable">
-                    <table className="payroll-table pivot">
-                      <thead>
-                        <tr>
-                          <th>
-                            <span className="th-label">Сотрудник</span>
-                            <span className="th-source">и его ставка</span>
-                          </th>
-                          <th
-                            className="numeric"
-                            title="Фактически отработанные часы из явок iiko"
-                          >
-                            <span className="th-label">Часы</span>
-                            <span className="th-source">явки iiko</span>
-                          </th>
-                          {columns.map((column) => (
-                            <th
-                              className="numeric"
-                              key={column.key}
-                              title={column.hint}
-                            >
-                              <span className="th-label">{column.label}</span>
-                              <span className="th-source">{column.source}</span>
-                            </th>
-                          ))}
-                          <th
-                            className="numeric"
-                            title="Сумма всех начислений и удержаний"
-                          >
-                            <span className="th-label">К выдаче</span>
-                            <span className="th-source">итог, ₽</span>
-                          </th>
-                          <th title="Отметка о выдаче денег — защита от двойной выплаты">
-                            <span className="th-label">Выплата</span>
-                            <span className="th-source">отметка</span>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {group.rows.map((row) => (
-                          <tr
-                            key={row.employeeId}
-                            className={row.total < 0 ? "problem-row" : undefined}
-                          >
-                            <td>
-                              {group.version ? (
-                                <Link
-                                  className="employee-link"
-                                  href={`/payroll/${periodId}/employee/${row.employeeId}?unit=${group.id}&version=${group.version}`}
-                                >
-                                  <strong>{row.name}</strong>
-                                </Link>
-                              ) : (
-                                <strong>{row.name}</strong>
-                              )}
-                              {row.rateLabel && (
-                                <small className="rate-hint">
-                                  {row.rateLabel}
-                                </small>
-                              )}
-                            </td>
-                            <td className="numeric">
-                              {row.hours > 0 ? formatHours(row.hours) : ""}
-                            </td>
-                            {columns.map((column) => {
-                              const value = Math.round(
-                                row.components[column.key] ?? 0,
-                              );
-                              const isBase = column.key === "base";
-                              const isLeader = column.key === "leader";
-                              return (
-                                <td
-                                  className={`numeric ${value < 0 ? "neg" : ""}`}
-                                  key={column.key}
-                                >
-                                  {value !== 0
-                                    ? formatAmountCell(value)
-                                    : isBase && row.hours > 0 && !row.hasRate
-                                      ? (
-                                          <span className="warn-badge">
-                                            нет ставки
-                                          </span>
-                                        )
-                                      : isLeader && row.leaderShifts > 0
-                                        ? (
-                                            <span
-                                              className="dim"
-                                              title="Смены шифт-лидера по графику (количество, без начислений)"
-                                            >
-                                              {row.leaderShifts}{" "}
-                                              {row.leaderShifts === 1
-                                                ? "смена"
-                                                : row.leaderShifts < 5
-                                                  ? "смены"
-                                                  : "смен"}
-                                            </span>
-                                          )
-                                        : ""}
-                                </td>
-                              );
-                            })}
-                            <td
-                              className={`numeric total-cell ${row.total < 0 ? "neg" : ""}`}
-                            >
-                              {formatAmountCell(Math.round(row.total))}
-                            </td>
-                            <td className="payout-cell">
-                              <PayoutCheckbox
-                                periodId={periodId}
-                                businessUnitId={group.id}
-                                employeeId={row.employeeId}
-                                employeeName={row.name}
-                                currentAmount={row.total}
-                                payout={row.payout}
-                                role={profile.role}
-                              />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr>
-                          <td>Итого</td>
-                          <td className="numeric">
-                            {formatHours(group.hoursTotal)}
-                          </td>
-                          {columns.map((column) => {
-                            const value = Math.round(
-                              group.columnTotals[column.key] ?? 0,
-                            );
-                            return (
-                              <td
-                                className={`numeric ${value < 0 ? "neg" : ""}`}
-                                key={column.key}
-                              >
-                                {value !== 0 ? formatAmountCell(value) : ""}
-                              </td>
-                            );
-                          })}
-                          <td className="numeric total-cell">
-                            {formatAmountCell(Math.round(group.total))}
-                          </td>
-                          <td />
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </section>
-              ))}
-            </div>
+            <PayrollTables
+              periodId={periodId}
+              groups={groups}
+              columns={columns.map(({ key, label, source, hint }) => ({
+                key,
+                label,
+                source,
+                hint,
+              }))}
+              role={profile.role}
+            />
           )}
         </section>
 
