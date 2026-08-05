@@ -12,6 +12,12 @@ type ExtrasResult = {
   ok: boolean;
   error?: string;
 
+  sales_percent?: Array<
+    MatchedSum & { role: "waiter" | "bartender"; sales_amount: number }
+  >;
+  sales_percent_total?: number;
+  sales_unmatched?: Array<{ name: string; amount: number }>;
+  sales_skipped_role?: Array<{ name: string; amount: number }>;
   bonuses?: MatchedSum[];
   bonuses_total?: number;
   bonuses_unmatched?: Array<{ name: string; amount: number }>;
@@ -22,6 +28,7 @@ type ExtrasResult = {
   service_charges?: Array<{ business_unit_name: string; amount: number }>;
   service_charges_total?: number;
 
+  imported_sales_percent_count?: number;
   imported_bonus_count?: number;
   imported_purchase_count?: number;
   imported_service_charge_count?: number;
@@ -100,8 +107,18 @@ export function IikoExtrasCard({ initialFrom, initialTo }: IikoExtrasCardProps) 
 
   const isImportResult = typeof result?.imported_bonus_count === "number";
   const unmatched = [
-    ...(result?.bonuses_unmatched ?? []),
-    ...(result?.purchases_unmatched ?? []),
+    ...(result?.sales_unmatched ?? []).map((row) => ({
+      ...row,
+      kind: "продажи",
+    })),
+    ...(result?.bonuses_unmatched ?? []).map((row) => ({
+      ...row,
+      kind: "фикс",
+    })),
+    ...(result?.purchases_unmatched ?? []).map((row) => ({
+      ...row,
+      kind: "покупки",
+    })),
   ];
 
   return (
@@ -110,8 +127,9 @@ export function IikoExtrasCard({ initialFrom, initialTo }: IikoExtrasCardProps) 
         <div>
           <h2>Мотивация, покупки и сервисный сбор из iiko</h2>
           <p>
-            Готовые бонусы (счёт «Зарплата»), покупки в счёт зарплаты и
-            сервисный сбор из чеков. Проверка ничего не записывает.
+            Процент от личных продаж по шкале мотивации (официанты 4/5/6%,
+            бармены 2%), фиксы за блюда (счёт «Зарплата»), покупки в счёт
+            зарплаты и сервисный сбор из чеков. Проверка ничего не записывает.
           </p>
         </div>
       </div>
@@ -189,8 +207,16 @@ export function IikoExtrasCard({ initialFrom, initialTo }: IikoExtrasCardProps) 
       {result?.ok && (
         <>
           <div className="metric-grid" style={{ marginTop: "22px" }}>
+            <article className="metric-card accent">
+              <span>% от продаж</span>
+              <strong>{money(result.sales_percent_total)}</strong>
+              <small>
+                {result.sales_percent?.length ?? 0} сотрудников (шкала
+                мотивации)
+              </small>
+            </article>
             <article className="metric-card">
-              <span>Бонусы мотивации</span>
+              <span>Фикс за блюда</span>
               <strong>{money(result.bonuses_total)}</strong>
               <small>{result.bonuses?.length ?? 0} сотрудников</small>
             </article>
@@ -215,9 +241,30 @@ export function IikoExtrasCard({ initialFrom, initialTo }: IikoExtrasCardProps) 
             </article>
           </div>
 
+          {(result.sales_percent?.length ?? 0) > 0 && (
+            <div style={{ marginTop: "18px" }}>
+              <h3>Процент от продаж — расшифровка</h3>
+              <div style={{ display: "grid", gap: "8px", marginTop: "10px" }}>
+                {result.sales_percent?.map((row) => (
+                  <div key={row.employee_name} className="plain-row">
+                    <span>
+                      {row.employee_name}{" "}
+                      <span className="muted">
+                        ({row.role === "bartender" ? "бармен 2%" : "официант"},
+                        выручка {money(row.sales_amount)})
+                      </span>
+                    </span>
+                    <strong>{money(row.amount)}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {isImportResult && (
             <div className="notice success">
-              <strong>Импорт завершён.</strong> Бонусы:{" "}
+              <strong>Импорт завершён.</strong> % от продаж:{" "}
+              {result.imported_sales_percent_count}, фиксы:{" "}
               {result.imported_bonus_count}, покупки:{" "}
               {result.imported_purchase_count}, сервисный сбор:{" "}
               {result.imported_service_charge_count} строк. Пересчитайте
@@ -229,6 +276,17 @@ export function IikoExtrasCard({ initialFrom, initialTo }: IikoExtrasCardProps) 
                   {result.skipped_no_business_unit?.join(", ")}.
                 </>
               )}
+            </div>
+          )}
+
+          {(result.sales_skipped_role?.length ?? 0) > 0 && (
+            <div className="notice warn">
+              Есть личные продажи, но роль (официант/бармен) не определена —
+              процент не начислен:{" "}
+              {result.sales_skipped_role
+                ?.map((row) => `${row.name} (${money(row.amount)})`)
+                .join(", ")}
+              . Укажите должность сотрудника, если процент положен.
             </div>
           )}
 
@@ -245,8 +303,10 @@ export function IikoExtrasCard({ initialFrom, initialTo }: IikoExtrasCardProps) 
               <h3>Не сопоставлены с сотрудниками портала</h3>
               <div style={{ display: "grid", gap: "8px", marginTop: "10px" }}>
                 {unmatched.map((row) => (
-                  <div key={row.name} className="plain-row">
-                    <span>{row.name}</span>
+                  <div key={`${row.kind}:${row.name}`} className="plain-row">
+                    <span>
+                      {row.name} <span className="muted">({row.kind})</span>
+                    </span>
                     <strong>{money(row.amount)}</strong>
                   </div>
                 ))}

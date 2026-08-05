@@ -45,6 +45,8 @@ export async function GET(request: NextRequest) {
 
   const unit = params.get("unit") || null;
   const category = params.get("cat") || null;
+  const abcParam = params.get("abc");
+  const abc = abcParam === "A" || abcParam === "B" || abcParam === "C" ? abcParam : null;
   const search = (params.get("q") ?? "").trim().toLowerCase();
 
   const prev = previousRange(from, to);
@@ -74,6 +76,7 @@ export async function GET(request: NextRequest) {
     .filter(
       (stat) =>
         (!category || stat.category === category) &&
+        (!abc || stat.abc === abc) &&
         (!search || stat.name.toLowerCase().includes(search)),
     )
     .sort((a, b) => b.revenue - a.revenue);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { fetchServiceChargeReceipts } from "@/lib/iiko/olap";
-import { normalizeName } from "@/lib/iiko/attendance";
+import { nameMatchKey, normalizeName } from "@/lib/iiko/attendance";
 
 export const dynamic = "force-dynamic";
 
@@ -117,6 +117,7 @@ export async function GET(request: NextRequest) {
     const [
       { data: attendance, error: attendanceError },
       { data: allocations, error: allocationsError },
+      { data: aliases, error: aliasesError },
     ] = await Promise.all([
       supabase
         .from("attendance_records")
@@ -129,11 +130,15 @@ export async function GET(request: NextRequest) {
         .eq("payroll_period_id", periodId)
         .eq("business_unit_id", unitId)
         .eq("source_system", "service_split"),
+      supabase
+        .from("employee_aliases")
+        .select("employee_id, external_key, source_name"),
     ]);
 
     if (attendanceError) throw new Error(`Явки: ${attendanceError.message}`);
     if (allocationsError)
       throw new Error(`Распределение: ${allocationsError.message}`);
+    if (aliasesError) throw new Error(`Псевдонимы: ${aliasesError.message}`);
 
     const allocationByEmployee = new Map<string, number>();
     for (const row of allocations ?? []) {
@@ -177,6 +182,49 @@ export async function GET(request: NextRequest) {
         ) * 100,
       ) / 100;
 
+    // Подсказка «по чекам»: сбор каждого чека — официанту, который его пробил.
+    const nameToEmployee = new Map<string, string>();
+    const sortedNameToEmployee = new Map<string, string | null>();
+    const addNameKeys = (value: string | null | undefined, employeeId: string) => {
+      const key = normalizeName(value);
+      if (!key) return;
+      if (!nameToEmployee.has(key)) nameToEmployee.set(key, employeeId);
+      const sortedKey = nameMatchKey(value);
+      const existing = sortedNameToEmployee.get(sortedKey);
+      if (existing === undefined) sortedNameToEmployee.set(sortedKey, employeeId);
+      else if (existing !== employeeId) sortedNameToEmployee.set(sortedKey, null);
+    };
+    for (const [employeeId, info] of hoursByEmployee.entries()) {
+      addNameKeys(info.name, employeeId);
+    }
+    for (const alias of aliases ?? []) {
+      if (hoursByEmployee.has(alias.employee_id)) {
+        addNameKeys(alias.external_key, alias.employee_id);
+        addNameKeys(alias.source_name, alias.employee_id);
+      }
+    }
+
+    const byReceipts: Record<string, number> = {};
+    const receiptsUnmatched = new Map<string, number>();
+    for (const receipt of receipts) {
+      const employeeId =
+        nameToEmployee.get(normalizeName(receipt.waiterName)) ??
+        sortedNameToEmployee.get(nameMatchKey(receipt.waiterName)) ??
+        null;
+      if (employeeId) {
+        byReceipts[employeeId] =
+          Math.round(((byReceipts[employeeId] ?? 0) + receipt.amount) * 100) /
+          100;
+      } else {
+        const key = receipt.waiterName || "(без официанта)";
+        receiptsUnmatched.set(
+          key,
+          Math.round(((receiptsUnmatched.get(key) ?? 0) + receipt.amount) * 100) /
+            100,
+        );
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       period: {
@@ -190,6 +238,10 @@ export async function GET(request: NextRequest) {
       remainder: Math.round((total - distributed) * 100) / 100,
       receipts,
       employees,
+      by_receipts: byReceipts,
+      by_receipts_unmatched: Array.from(receiptsUnmatched.entries()).map(
+        ([name, amount]) => ({ name, amount }),
+      ),
     });
   } catch (error) {
     console.error(error);

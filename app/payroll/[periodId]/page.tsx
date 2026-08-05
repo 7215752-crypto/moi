@@ -84,15 +84,15 @@ const COMPONENT_COLUMNS: Array<{
   {
     key: "motivation",
     label: "% от продаж",
-    source: "бонусы iiko",
-    hint: "Процент от продаж — готовые бонусы из iiko (счёт «Зарплата»)",
+    source: "продажи iiko",
+    hint: "Процент от личных продаж по шкале мотивации: официанты 4% до 600 тыс., 5% на 600–750 тыс., 6% свыше; бармены 2%",
     types: ["iiko_motivation"],
   },
   {
     key: "fixed",
     label: "Фикс блюда",
     source: "бонусы iiko",
-    hint: "Фиксированные бонусы за блюда из iiko",
+    hint: "Фиксированные бонусы за блюда — счёт «Зарплата» в iiko",
     types: ["iiko_fixed_bonus"],
   },
   {

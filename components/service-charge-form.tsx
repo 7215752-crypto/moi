@@ -27,6 +27,8 @@ type ChargeData = {
   remainder?: number;
   receipts?: Receipt[];
   employees?: EmployeeRow[];
+  by_receipts?: Record<string, number>;
+  by_receipts_unmatched?: Array<{ name: string; amount: number }>;
 };
 
 const money = (value: number) =>
@@ -216,11 +218,84 @@ export function ServiceChargeForm({
           <div>
             <h2>Распределение между сотрудниками</h2>
             <p>
-              Введите сумму каждому. Часы за период показаны для ориентира —
-              деление полностью на ваше усмотрение.
+              Введите сумму каждому — или заполните автоматически и
+              поправьте руками.
             </p>
           </div>
         </div>
+
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "10px",
+            marginTop: "12px",
+          }}
+        >
+          <button
+            type="button"
+            className="action-button"
+            disabled={saving}
+            title="Сбор каждого чека — официанту, который его пробил"
+            onClick={() => {
+              const suggestion = data.by_receipts ?? {};
+              const next: Record<string, string> = {};
+              for (const employee of employees) {
+                const amount = suggestion[employee.employee_id] ?? 0;
+                next[employee.employee_id] =
+                  amount > 0 ? String(Math.round(amount)) : "";
+              }
+              setInputs(next);
+              setMessage(null);
+            }}
+          >
+            По чекам (кто пробил)
+          </button>
+          <button
+            type="button"
+            className="action-button"
+            disabled={saving || employees.length === 0}
+            title="Разделить весь сбор поровну между всеми в списке"
+            onClick={() => {
+              const share = Math.floor(total / employees.length);
+              const next: Record<string, string> = {};
+              employees.forEach((employee, index) => {
+                // Остаток от округления — первому в списке.
+                const amount =
+                  index === 0
+                    ? total - share * (employees.length - 1)
+                    : share;
+                next[employee.employee_id] = String(Math.round(amount));
+              });
+              setInputs(next);
+              setMessage(null);
+            }}
+          >
+            Поровну
+          </button>
+          <button
+            type="button"
+            className="action-button"
+            disabled={saving}
+            title="Очистить все суммы"
+            onClick={() => {
+              setInputs({});
+              setMessage(null);
+            }}
+          >
+            Очистить
+          </button>
+        </div>
+
+        {(data.by_receipts_unmatched?.length ?? 0) > 0 && (
+          <p className="muted" style={{ marginTop: "10px" }}>
+            Не сопоставлены с сотрудниками списка:{" "}
+            {data.by_receipts_unmatched
+              ?.map((row) => `${row.name} (${money(row.amount)})`)
+              .join(", ")}{" "}
+            — их чеки при заполнении «по чекам» остаются нераспределёнными.
+          </p>
+        )}
 
         <div className="payroll-table-wrap" style={{ marginTop: "12px" }}>
           <table className="payroll-table">

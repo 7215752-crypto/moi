@@ -1,6 +1,7 @@
 export type IikoEmployee = {
   id: string;
   name: string;
+  mainRoleCode: string;
 };
 
 export type IikoAttendance = {
@@ -44,7 +45,7 @@ export function parseEmployeesXml(xml: string): IikoEmployee[] {
         .join(" ");
 
     if (id && name) {
-      employees.push({ id, name });
+      employees.push({ id, name, mainRoleCode: extractTag(block, "mainRoleCode") });
     }
   }
 

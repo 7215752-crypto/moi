@@ -97,6 +97,13 @@ export async function getEmployeesAndAttendance(
   });
 }
 
+// Справочник сотрудников iiko (id, имя, код основной роли).
+export async function getEmployeesXml(): Promise<string> {
+  return withIikoServerSession((token) =>
+    fetchXml(token, "/employees?includeDeleted=false", "сотрудники"),
+  );
+}
+
 // Номенклатура iiko: все продукты (блюда, заготовки, товары, модификаторы).
 export async function getProductsList(): Promise<string> {
   return withIikoServerSession((token) =>

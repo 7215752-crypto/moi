@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { AnalyticsRefreshButton } from "@/components/analytics-refresh-button";
+import { ColumnFilter } from "@/components/column-filter";
 import { requireUser } from "@/lib/auth";
 import { formatDate, formatMoneyWhole } from "@/lib/format";
 import {
@@ -134,9 +135,14 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   const searchText = (firstParam(query.q) ?? "").trim();
   const searchLower = searchText.toLowerCase();
 
+  const abcParam = firstParam(query.abc);
+  const selectedAbc =
+    abcParam === "A" || abcParam === "B" || abcParam === "C" ? abcParam : null;
+
   const filteredStats = stats.filter(
     (stat) =>
       (!selectedCategory || stat.category === selectedCategory) &&
+      (!selectedAbc || stat.abc === selectedAbc) &&
       (!searchLower || stat.name.toLowerCase().includes(searchLower)),
   );
 
@@ -277,21 +283,29 @@ export default async function AnalyticsPage({ searchParams }: Props) {
   const hasAnyData = stats.length > 0 || prevDishes.size > 0 || cats.length > 0;
 
   // ---- Ссылки с сохранением остальных фильтров.
-  const buildHref = (overrides: Record<string, string | undefined>): string => {
+  const currentParams: Record<string, string> = {};
+  {
     const merged: Record<string, string | undefined> = {
       from,
       to,
       unit: unitId ?? undefined,
       cat: selectedCategory ?? undefined,
+      abc: selectedAbc ?? undefined,
       q: searchText || undefined,
       tab: tab === "dishes" ? undefined : tab,
       sort: sortKey === "revenue" ? undefined : sortKey,
       dir: dir === "desc" ? undefined : dir,
-      ...overrides,
     };
-    const params = new URLSearchParams();
     for (const [key, value] of Object.entries(merged)) {
+      if (value) currentParams[key] = value;
+    }
+  }
+
+  const buildHref = (overrides: Record<string, string | undefined>): string => {
+    const params = new URLSearchParams(currentParams);
+    for (const [key, value] of Object.entries(overrides)) {
       if (value) params.set(key, value);
+      else params.delete(key);
     }
     const queryString = params.toString();
     return queryString ? `/analytics?${queryString}` : "/analytics";
@@ -342,6 +356,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                 to,
                 ...(unitId ? { unit: unitId } : {}),
                 ...(selectedCategory ? { cat: selectedCategory } : {}),
+                ...(selectedAbc ? { abc: selectedAbc } : {}),
                 ...(searchText ? { q: searchText } : {}),
               }).toString()}`}
             >
@@ -351,7 +366,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </div>
         </section>
 
-        <section className="content-card">
+        <section className="analytics-toolbar">
           <div className="preset-row">
             {presets.map((preset) => {
               const active = preset.from === from && preset.to === to;
@@ -368,51 +383,50 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </div>
 
           <form
-            key={`${from}|${to}|${unitId ?? "all"}|${selectedCategory ?? "all"}|${searchText}`}
-            className="filter-form analytics-filter"
+            key={`${from}|${to}|${unitId ?? "all"}|${searchText}`}
+            className="analytics-filter-inline"
             method="get"
             action="/analytics"
           >
-            <label>
-              <span>С</span>
-              <input className="form-input" type="date" name="from" defaultValue={from} />
-            </label>
-            <label>
-              <span>По</span>
-              <input className="form-input" type="date" name="to" defaultValue={to} />
-            </label>
-            <label>
-              <span>Ресторан</span>
-              <select name="unit" defaultValue={unitId ?? ""}>
-                <option value="">Все рестораны</option>
-                {units.map((unit) => (
-                  <option key={unit.id} value={unit.id}>
-                    {unit.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>Категория</span>
-              <select name="cat" defaultValue={selectedCategory ?? ""}>
-                <option value="">Все категории</option>
-                {categories.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>Поиск</span>
-              <input
-                className="form-input"
-                type="text"
-                name="q"
-                placeholder="Название блюда"
-                defaultValue={searchText}
-              />
-            </label>
+            <input
+              className="form-input"
+              type="date"
+              name="from"
+              defaultValue={from}
+              aria-label="Дата с"
+            />
+            <span className="filter-dash">—</span>
+            <input
+              className="form-input"
+              type="date"
+              name="to"
+              defaultValue={to}
+              aria-label="Дата по"
+            />
+            <select name="unit" defaultValue={unitId ?? ""} aria-label="Ресторан">
+              <option value="">Все рестораны</option>
+              {units.map((unit) => (
+                <option key={unit.id} value={unit.id}>
+                  {unit.name}
+                </option>
+              ))}
+            </select>
+            <input
+              className="form-input"
+              type="text"
+              name="q"
+              placeholder="Найти блюдо"
+              defaultValue={searchText}
+            />
+            {selectedCategory && (
+              <input type="hidden" name="cat" value={selectedCategory} />
+            )}
+            {selectedAbc && <input type="hidden" name="abc" value={selectedAbc} />}
+            {tab !== "dishes" && <input type="hidden" name="tab" value={tab} />}
+            {sortKey !== "revenue" && (
+              <input type="hidden" name="sort" value={sortKey} />
+            )}
+            {dir !== "desc" && <input type="hidden" name="dir" value={dir} />}
             <button type="submit" className="action-button primary">
               Показать
             </button>
@@ -428,7 +442,7 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           </section>
         ) : (
           <>
-            <section className="metric-grid">
+            <section className="metric-grid analytics-metrics">
               <article className="metric-card">
                 <span>Выручка за период</span>
                 <strong className="metric-money">{formatMoneyWhole(totalRevenue)}</strong>
@@ -523,7 +537,21 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                             Блюдо{sortMark("name")}
                           </Link>
                         </th>
-                        <th>Категория</th>
+                        <th>
+                          Категория
+                          <ColumnFilter
+                            name="cat"
+                            value={selectedCategory ?? ""}
+                            baseParams={currentParams}
+                            options={[
+                              { value: "", label: "Все" },
+                              ...categories.map((category) => ({
+                                value: category,
+                                label: category,
+                              })),
+                            ]}
+                          />
+                        </th>
                         <th className="numeric">
                           <Link className="th-sort" href={sortHref("qty")}>
                             Шт{sortMark("qty")}
@@ -550,7 +578,20 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                             К прошлому{sortMark("delta")}
                           </Link>
                         </th>
-                        <th>Класс</th>
+                        <th>
+                          Класс
+                          <ColumnFilter
+                            name="abc"
+                            value={selectedAbc ?? ""}
+                            baseParams={currentParams}
+                            options={[
+                              { value: "", label: "Все" },
+                              { value: "A", label: "A" },
+                              { value: "B", label: "B" },
+                              { value: "C", label: "C" },
+                            ]}
+                          />
+                        </th>
                       </tr>
                     </thead>
                     <tbody>

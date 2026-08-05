@@ -2460,34 +2460,84 @@ h3 {
   color: var(--on-brand);
 }
 
-/* Своя сетка фильтров: базовый .filter-form свёрстан под один селект с кнопкой
-   и раскладывает несколько полей друг на друга. */
-.analytics-filter {
-  display: grid;
+/* Компактная панель фильтров: пресеты и поля в одну строку, без карточки. */
+.analytics-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.analytics-filter-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.analytics-filter-inline .form-input,
+.analytics-filter-inline select {
+  min-height: 38px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.analytics-filter-inline input[type="date"] {
+  width: 148px;
+}
+
+.analytics-filter-inline input[type="text"] {
+  flex: 1;
+  min-width: 160px;
+}
+
+.analytics-filter-inline .filter-dash {
+  color: var(--faint);
+}
+
+.analytics-filter-inline button {
+  min-height: 38px;
+}
+
+/* Компактные карточки метрик аналитики — один ряд вместо двух. */
+.metric-grid.analytics-metrics {
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
-  align-items: end;
+  gap: 10px;
+  margin-bottom: 16px;
 }
 
-.analytics-filter label {
-  display: grid;
-  gap: 6px;
-  grid-column: auto;
-  grid-row: auto;
+.analytics-metrics .metric-card {
+  padding: 10px 14px;
 }
 
-.analytics-filter select,
-.analytics-filter .form-input {
-  grid-column: auto;
-  grid-row: auto;
+.analytics-metrics .metric-card strong {
+  margin: 4px 0 2px;
+  font-size: 19px;
+}
+
+.analytics-metrics .metric-card small {
+  font-size: 11px;
+}
+
+/* Фильтр в шапке колонки таблицы. */
+.th-filter {
+  display: block;
   width: 100%;
-  min-height: 42px;
-}
-
-.analytics-filter button {
-  grid-column: auto;
-  grid-row: auto;
-  min-height: 42px;
+  min-width: 110px;
+  margin-top: 4px;
+  padding: 2px 6px;
+  min-height: 28px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .span-full {
