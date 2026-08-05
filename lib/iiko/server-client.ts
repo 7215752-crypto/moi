@@ -97,6 +97,42 @@ export async function getEmployeesAndAttendance(
   });
 }
 
+// Номенклатура iiko: все продукты (блюда, заготовки, товары, модификаторы).
+export async function getProductsList(): Promise<string> {
+  return withIikoServerSession((token) =>
+    fetchXml(
+      token,
+      "/v2/entities/products/list?includeDeleted=false",
+      "номенклатура",
+    ),
+  );
+}
+
+// Справочник единиц измерения (кг, шт, л, порц).
+export async function getMeasureUnits(): Promise<string> {
+  return withIikoServerSession((token) =>
+    fetchXml(
+      token,
+      "/v2/entities/list?rootType=MeasureUnit",
+      "единицы измерения",
+    ),
+  );
+}
+
+// Техкарта блюда, действующая на дату (состав и нормы закладки).
+export async function getAssemblyChart(
+  productId: string,
+  date: string,
+): Promise<string> {
+  return withIikoServerSession((token) =>
+    fetchXml(
+      token,
+      `/v2/assemblyCharts/getPrepared?date=${encodeURIComponent(date)}&productId=${encodeURIComponent(productId)}`,
+      "техкарта",
+    ),
+  );
+}
+
 // Список доступных полей OLAP-отчёта (SALES / TRANSACTIONS / DELIVERIES).
 export async function getOlapColumns(reportType: string): Promise<string> {
   return withIikoServerSession((token) =>
