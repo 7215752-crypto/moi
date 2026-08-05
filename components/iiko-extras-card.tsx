@@ -13,7 +13,11 @@ type ExtrasResult = {
   error?: string;
 
   sales_percent?: Array<
-    MatchedSum & { role: "waiter" | "bartender"; sales_amount: number }
+    MatchedSum & {
+      role: "waiter" | "bartender";
+      sales_amount: number;
+      bar_sales: number;
+    }
   >;
   sales_percent_total?: number;
   sales_unmatched?: Array<{ name: string; amount: number }>;
@@ -246,12 +250,20 @@ export function IikoExtrasCard({ initialFrom, initialTo }: IikoExtrasCardProps) 
               <h3>Процент от продаж — расшифровка</h3>
               <div style={{ display: "grid", gap: "8px", marginTop: "10px" }}>
                 {result.sales_percent?.map((row) => (
-                  <div key={row.employee_name} className="plain-row">
+                  <div
+                    key={`${row.employee_name}:${row.business_unit_name}`}
+                    className="plain-row"
+                  >
                     <span>
                       {row.employee_name}{" "}
                       <span className="muted">
-                        ({row.role === "bartender" ? "бармен 2%" : "официант"},
-                        выручка {money(row.sales_amount)})
+                        ({row.business_unit_name},{" "}
+                        {row.role === "bartender" ? "бармен 2%" : "официант"},
+                        выручка {money(row.sales_amount)}
+                        {row.bar_sales > 0
+                          ? `, из них бар ${money(row.bar_sales)}`
+                          : ""}
+                        )
                       </span>
                     </span>
                     <strong>{money(row.amount)}</strong>

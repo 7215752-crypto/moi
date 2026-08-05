@@ -94,6 +94,7 @@ type MatchedSum = {
 type SalesPercentRow = MatchedSum & {
   role: "waiter" | "bartender";
   sales_amount: number;
+  bar_sales: number;
 };
 
 type Prepared = {
@@ -154,6 +155,7 @@ async function prepare(
     { data: attendance, error: attendanceError },
     { data: assignments, error: assignmentsError },
     { data: departments, error: departmentsError },
+    { data: plannedShifts, error: plannedShiftsError },
   ] = await Promise.all([
     supabase.from("employees").select("id, full_name"),
     supabase.from("employee_aliases").select("employee_id, external_key, source_name"),
@@ -168,6 +170,11 @@ async function prepare(
         "employee_id, business_unit_id, position_name, is_primary, valid_from, valid_to",
       ),
     supabase.from("departments").select("id, name"),
+    supabase
+      .from("planned_shifts")
+      .select("employee_id, shift_date, department_id")
+      .gte("shift_date", from)
+      .lte("shift_date", to),
   ]);
 
   if (employeesError) throw new Error(`Сотрудники: ${employeesError.message}`);
@@ -179,6 +186,8 @@ async function prepare(
     throw new Error(`Назначения: ${assignmentsError.message}`);
   if (departmentsError)
     throw new Error(`Департаменты: ${departmentsError.message}`);
+  if (plannedShiftsError)
+    throw new Error(`График смен: ${plannedShiftsError.message}`);
 
   // Сопоставление по имени (включая перестановку слов; неоднозначное — пропуск).
   const nameToEmployee = new Map<string, string>();
@@ -373,57 +382,100 @@ async function prepare(
     };
   });
 
-  // Процент от продаж: личная выручка (кто пробил позицию) суммируется по всем
-  // ресторанам — пороги шкалы действуют на человека за полупериод целиком.
-  const salesByName = new Map<string, number>();
-  for (const row of salesRaw) {
-    const key = row.waiterName;
-    salesByName.set(key, (salesByName.get(key) ?? 0) + row.amount);
+  // Процент от продаж: выручка и пороги шкалы считаются ПО КАЖДОМУ РЕСТОРАНУ
+  // отдельно (решение владельца 05.08). Барные смены по графику — плоские 2%
+  // даже у официанта; остальная выручка официанта идёт по шкале.
+  const barDepartmentIds = new Set(
+    (departments ?? [])
+      .filter((department) => normalizeName(department.name).includes("бар"))
+      .map((department) => department.id),
+  );
+  const barDays = new Set<string>();
+  for (const shift of plannedShifts ?? []) {
+    if (shift.department_id && barDepartmentIds.has(shift.department_id)) {
+      barDays.add(`${shift.employee_id}|${shift.shift_date}`);
+    }
   }
 
-  const salesByEmployee = new Map<string, number>();
-  const salesUnmatched: Array<{ name: string; amount: number }> = [];
-  for (const [name, amount] of salesByName.entries()) {
-    const employeeId = resolveByName(name);
-    const rounded = Math.round(amount * 100) / 100;
-    if (!employeeId) {
-      salesUnmatched.push({ name, amount: rounded });
+  // employeeId → (businessUnitId → выручка «в шкалу» и «барная»).
+  const salesByEmployeeUnit = new Map<
+    string,
+    Map<string, { scaleSales: number; barSales: number }>
+  >();
+  const salesUnmatchedByName = new Map<string, number>();
+  for (const row of salesRaw) {
+    const employeeId = resolveByName(row.waiterName);
+    const businessUnitId = employeeId ? matchBu(row.departmentName) : null;
+    if (!employeeId || !businessUnitId) {
+      const key = employeeId
+        ? `${row.waiterName} (${row.departmentName})`
+        : row.waiterName;
+      salesUnmatchedByName.set(
+        key,
+        Math.round(((salesUnmatchedByName.get(key) ?? 0) + row.amount) * 100) /
+          100,
+      );
       continue;
     }
-    salesByEmployee.set(
-      employeeId,
-      Math.round(((salesByEmployee.get(employeeId) ?? 0) + rounded) * 100) / 100,
-    );
+    const byUnit =
+      salesByEmployeeUnit.get(employeeId) ??
+      new Map<string, { scaleSales: number; barSales: number }>();
+    const bucket = byUnit.get(businessUnitId) ?? { scaleSales: 0, barSales: 0 };
+    if (barDays.has(`${employeeId}|${row.date}`)) bucket.barSales += row.amount;
+    else bucket.scaleSales += row.amount;
+    byUnit.set(businessUnitId, bucket);
+    salesByEmployeeUnit.set(employeeId, byUnit);
   }
 
   const salesPercent: SalesPercentRow[] = [];
   const salesSkippedRole: Array<{ name: string; amount: number }> = [];
-  for (const [employeeId, salesAmount] of salesByEmployee.entries()) {
+  for (const [employeeId, byUnit] of salesByEmployeeUnit.entries()) {
     const employeeName = employeeNameById.get(employeeId) ?? employeeId;
     const role = roleOf(employeeId);
     if (!role) {
-      salesSkippedRole.push({ name: employeeName, amount: salesAmount });
+      const totalSales = Array.from(byUnit.values()).reduce(
+        (sum, bucket) => sum + bucket.scaleSales + bucket.barSales,
+        0,
+      );
+      salesSkippedRole.push({
+        name: employeeName,
+        amount: Math.round(totalSales * 100) / 100,
+      });
       continue;
     }
-    const amount = salesPercentAmount(role, salesAmount);
-    if (amount <= 0) continue;
-    const businessUnitId = mainBusinessUnit(employeeId);
-    salesPercent.push({
-      employee_id: employeeId,
-      employee_name: employeeName,
-      business_unit_id: businessUnitId,
-      business_unit_name: businessUnitId
-        ? (buNameById.get(businessUnitId) ?? null)
-        : null,
-      amount,
-      role,
-      sales_amount: salesAmount,
-    });
+    for (const [businessUnitId, bucket] of byUnit.entries()) {
+      const scaleSales = Math.round(bucket.scaleSales * 100) / 100;
+      const barSales = Math.round(bucket.barSales * 100) / 100;
+      // Бармену вся выручка идёт по 2%; официанту барные дни — 2%, остальное — шкала.
+      const amount =
+        role === "bartender"
+          ? salesPercentAmount("bartender", scaleSales + barSales)
+          : Math.round(
+              (salesPercentAmount("waiter", scaleSales) +
+                salesPercentAmount("bartender", barSales)) *
+                100,
+            ) / 100;
+      if (amount <= 0) continue;
+      salesPercent.push({
+        employee_id: employeeId,
+        employee_name: employeeName,
+        business_unit_id: businessUnitId,
+        business_unit_name: buNameById.get(businessUnitId) ?? null,
+        amount,
+        role,
+        sales_amount: Math.round((scaleSales + barSales) * 100) / 100,
+        bar_sales: barSales,
+      });
+    }
   }
-  salesPercent.sort((a, b) =>
-    a.employee_name.localeCompare(b.employee_name, "ru"),
+  salesPercent.sort(
+    (a, b) =>
+      a.employee_name.localeCompare(b.employee_name, "ru") ||
+      (a.business_unit_name ?? "").localeCompare(b.business_unit_name ?? "", "ru"),
   );
-  salesUnmatched.sort((a, b) => b.amount - a.amount);
+  const salesUnmatched = Array.from(salesUnmatchedByName.entries())
+    .map(([name, amount]) => ({ name, amount }))
+    .sort((a, b) => b.amount - a.amount);
 
   return {
     periodId: period.id,
@@ -519,10 +571,12 @@ export async function POST(request: NextRequest) {
         program_name:
           row.role === "bartender"
             ? "Процент от продаж (бармен 2%)"
-            : "Процент от продаж (официант 4/5/6%)",
+            : row.bar_sales > 0
+              ? "Процент от продаж (зал по шкале + бар 2%)"
+              : "Процент от продаж (официант 4/5/6%)",
         sales_amount: row.sales_amount,
         motivation_amount: row.amount,
-        external_record_id: `olap-sales-pct:${row.employee_id}`,
+        external_record_id: `olap-sales-pct:${row.employee_id}:${row.business_unit_id}`,
       }));
 
     // Чистим и легаси-записи olap-bonus (фиксы раньше жили в этой таблице).

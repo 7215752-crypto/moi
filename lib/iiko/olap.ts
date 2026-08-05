@@ -185,15 +185,18 @@ export async function fetchServiceChargeReceipts(
     .sort((a, b) => a.date.localeCompare(b.date) || (a.orderNum ?? 0) - (b.orderNum ?? 0));
 }
 
-// Продажи по официантам (для KPI/аналитики и сверки).
+// Личные продажи по официантам с разбивкой по ресторану и дню
+// (день нужен, чтобы отделять барные смены от зальных по графику).
 export async function fetchSalesByWaiter(
   from: string,
   to: string,
-): Promise<Array<{ departmentName: string; waiterName: string; amount: number }>> {
+): Promise<
+  Array<{ departmentName: string; waiterName: string; date: string; amount: number }>
+> {
   const rows = await runAndParse({
     reportType: "SALES",
     buildSummary: "false",
-    groupByRowFields: ["Department", "WaiterName"],
+    groupByRowFields: ["Department", "WaiterName", "OpenDate.Typed"],
     aggregateFields: ["DishDiscountSumInt"],
     filters: dateFilter("OpenDate.Typed", from, to),
   });
@@ -202,7 +205,8 @@ export async function fetchSalesByWaiter(
     .map((row) => ({
       departmentName: String(row["Department"] ?? "").trim(),
       waiterName: String(row["WaiterName"] ?? "").trim(),
+      date: String(row["OpenDate.Typed"] ?? "").substring(0, 10),
       amount: Math.round(Number(row["DishDiscountSumInt"] ?? 0) * 100) / 100,
     }))
-    .filter((row) => row.departmentName && row.waiterName && row.amount > 0);
+    .filter((row) => row.departmentName && row.waiterName && row.amount !== 0);
 }
