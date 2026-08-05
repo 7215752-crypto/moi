@@ -21,6 +21,19 @@ async function runAndParse(body: Record<string, unknown>): Promise<OlapRow[]> {
   return parsed.data ?? [];
 }
 
+function nextDay(date: string): string {
+  const parsed = new Date(`${date}T00:00:00Z`);
+  parsed.setUTCDate(parsed.getUTCDate() + 1);
+  return parsed.toISOString().substring(0, 10);
+}
+
+// Фильтр DateRange по DateTime режет по физическому времени проводки, а не по
+// учётному дню: ночные проводки учётного дня «to» (после полуночи) выпадают.
+// Берём диапазон на день шире и отсекаем по учётному дню уже в коде.
+function accountingDay(row: OlapRow): string {
+  return String(row["DateTime.DateTyped"] ?? "").substring(0, 10);
+}
+
 export type CounteragentSum = { name: string; amount: number };
 
 // Готовые бонусы мотивации: счёт «Зарплата», приход по контрагенту.
@@ -31,27 +44,30 @@ export async function fetchSalaryBonuses(
   const rows = await runAndParse({
     reportType: "TRANSACTIONS",
     buildSummary: "false",
-    groupByRowFields: ["Counteragent.Name"],
+    groupByRowFields: ["Counteragent.Name", "DateTime.DateTyped"],
     aggregateFields: ["Sum.Incoming"],
     filters: {
-      ...dateFilter("DateTime.DateTyped", from, to),
+      ...dateFilter("DateTime.DateTyped", from, nextDay(to)),
       "Account.Name": { filterType: "IncludeValues", values: ["Зарплата"] },
     },
   });
 
-  const byEmployee: CounteragentSum[] = [];
+  const byName = new Map<string, number>();
   let unassigned = 0;
 
   for (const row of rows) {
+    const day = accountingDay(row);
+    if (day < from || day > to) continue;
     const name = String(row["Counteragent.Name"] ?? "").trim();
-    const amount = Math.round(Number(row["Sum.Incoming"] ?? 0) * 100) / 100;
+    const amount = Number(row["Sum.Incoming"] ?? 0);
     if (amount === 0) continue;
-    if (!name) {
-      unassigned += amount;
-    } else {
-      byEmployee.push({ name, amount });
-    }
+    if (!name) unassigned += amount;
+    else byName.set(name, (byName.get(name) ?? 0) + amount);
   }
+
+  const byEmployee: CounteragentSum[] = Array.from(byName.entries()).map(
+    ([name, amount]) => ({ name, amount: Math.round(amount * 100) / 100 }),
+  );
 
   return { byEmployee, unassigned: Math.round(unassigned * 100) / 100 };
 }
@@ -64,10 +80,10 @@ export async function fetchEmployeePurchases(
   const rows = await runAndParse({
     reportType: "TRANSACTIONS",
     buildSummary: "false",
-    groupByRowFields: ["Counteragent.Name"],
+    groupByRowFields: ["Counteragent.Name", "DateTime.DateTyped"],
     aggregateFields: ["Sum.Incoming"],
     filters: {
-      ...dateFilter("DateTime.DateTyped", from, to),
+      ...dateFilter("DateTime.DateTyped", from, nextDay(to)),
       "Account.Name": {
         filterType: "IncludeValues",
         values: ["Текущие расчеты с сотрудниками"],
@@ -75,12 +91,84 @@ export async function fetchEmployeePurchases(
     },
   });
 
+  const byName = new Map<string, number>();
+  for (const row of rows) {
+    const day = accountingDay(row);
+    if (day < from || day > to) continue;
+    const name = String(row["Counteragent.Name"] ?? "").trim();
+    if (!name) continue;
+    byName.set(name, (byName.get(name) ?? 0) + Number(row["Sum.Incoming"] ?? 0));
+  }
+
+  return Array.from(byName.entries())
+    .map(([name, amount]) => ({
+      name,
+      amount: Math.round(amount * 100) / 100,
+    }))
+    .filter((row) => row.amount > 0);
+}
+
+export type EmployeePurchaseDetail = {
+  date: string;
+  document: string | null;
+  product: string | null;
+  amount: number;
+};
+
+// Расшифровка покупок сотрудника: накладные и продукты
+// (проводки счёта «Текущие расчеты с сотрудниками»; продукт берётся с
+// контр-стороны проводки — списания со склада).
+export async function fetchEmployeePurchaseDetails(
+  from: string,
+  to: string,
+  counteragentNames: string[],
+): Promise<EmployeePurchaseDetail[]> {
+  if (counteragentNames.length === 0) return [];
+
+  const rows = await runAndParse({
+    reportType: "TRANSACTIONS",
+    buildSummary: "false",
+    groupByRowFields: [
+      "DateTime.DateTyped",
+      "Document",
+      "Contr-Product.Name",
+    ],
+    aggregateFields: ["Sum.Incoming"],
+    filters: {
+      ...dateFilter("DateTime.DateTyped", from, nextDay(to)),
+      "Account.Name": {
+        filterType: "IncludeValues",
+        values: ["Текущие расчеты с сотрудниками"],
+      },
+      "Counteragent.Name": {
+        filterType: "IncludeValues",
+        values: counteragentNames,
+      },
+    },
+  });
+
   return rows
     .map((row) => ({
-      name: String(row["Counteragent.Name"] ?? "").trim(),
+      date: accountingDay(row),
+      document:
+        row["Document"] === null || row["Document"] === undefined
+          ? null
+          : String(row["Document"]).trim() || null,
+      product:
+        row["Contr-Product.Name"] === null ||
+        row["Contr-Product.Name"] === undefined
+          ? null
+          : String(row["Contr-Product.Name"]).trim() || null,
       amount: Math.round(Number(row["Sum.Incoming"] ?? 0) * 100) / 100,
     }))
-    .filter((row) => row.name && row.amount > 0);
+    .filter(
+      (row) => row.amount !== 0 && row.date >= from && row.date <= to,
+    )
+    .sort(
+      (a, b) =>
+        a.date.localeCompare(b.date) ||
+        (a.document ?? "").localeCompare(b.document ?? ""),
+    );
 }
 
 export type ServiceChargeSum = { departmentName: string; amount: number };

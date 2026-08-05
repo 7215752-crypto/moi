@@ -307,6 +307,17 @@ export default async function EmployeePayrollPage({ params, searchParams }: Prop
                       <strong>{humanizeComponent(line.component_type)}</strong>
                       <p>{line.description}</p>
                       <small>Источник: {humanizeSource(line.source_table)}</small>
+                      {line.component_type === "purchase" && (
+                        <small>
+                          <a
+                            href={`/payroll/${periodId}/employee/${employeeId}/purchases`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Накладные и продукты ↗
+                          </a>
+                        </small>
+                      )}
                     </div>
                     <strong className={amount < 0 ? "negative-money" : "positive-money"}>
                       {amount < 0 ? "−" : "+"}
