@@ -54,23 +54,29 @@ export default async function LaborCostPage({ searchParams }: Props) {
     );
   }
 
-  const [unitsResult, runsResult, revenueResult] = await Promise.all([
-    supabase.from("business_units").select("id, name").order("name"),
-    supabase
-      .from("payroll_runs")
-      .select("id, business_unit_id, version")
-      .eq("payroll_period_id", period.id),
-    supabase
-      .from("dish_sales_daily")
-      .select("business_unit_id, revenue")
-      .gte("sale_date", period.date_from)
-      .lte("sale_date", period.date_to),
-  ]);
+  const [unitsResult, runsResult, revenueResult, hoursResult] =
+    await Promise.all([
+      supabase.from("business_units").select("id, name").order("name"),
+      supabase
+        .from("payroll_runs")
+        .select("id, business_unit_id, version")
+        .eq("payroll_period_id", period.id),
+      supabase
+        .from("dish_sales_daily")
+        .select("business_unit_id, revenue")
+        .gte("sale_date", period.date_from)
+        .lte("sale_date", period.date_to),
+      supabase
+        .from("attendance_records")
+        .select("business_unit_id, hours")
+        .eq("payroll_period_id", period.id),
+    ]);
 
   if (unitsResult.error) throw new Error(`Рестораны: ${unitsResult.error.message}`);
   if (runsResult.error) throw new Error(`Расчёты: ${runsResult.error.message}`);
   if (revenueResult.error)
     throw new Error(`Выручка: ${revenueResult.error.message}`);
+  if (hoursResult.error) throw new Error(`Явки: ${hoursResult.error.message}`);
 
   const unitNameById = new Map<string, string>();
   for (const unit of unitsResult.data ?? []) unitNameById.set(unit.id, unit.name);
@@ -136,6 +142,14 @@ export default async function LaborCostPage({ searchParams }: Props) {
     );
   }
 
+  const hoursByUnit = new Map<string, number>();
+  for (const row of hoursResult.data ?? []) {
+    hoursByUnit.set(
+      row.business_unit_id,
+      (hoursByUnit.get(row.business_unit_id) ?? 0) + Number(row.hours ?? 0),
+    );
+  }
+
   const unitIds = Array.from(
     new Set([...laborByUnit.keys(), ...revenueByUnit.keys()]),
   );
@@ -143,13 +157,16 @@ export default async function LaborCostPage({ searchParams }: Props) {
     .map((unitId) => {
       const revenue = revenueByUnit.get(unitId) ?? 0;
       const labor = laborByUnit.get(unitId) ?? 0;
+      const hours = hoursByUnit.get(unitId) ?? 0;
       return {
         unitId,
         name: unitNameById.get(unitId) ?? unitId,
         revenue,
         labor,
+        hours,
         service: serviceByUnit.get(unitId) ?? 0,
         laborCost: revenue > 0 ? (labor / revenue) * 100 : null,
+        splh: revenue > 0 && hours > 0 ? revenue / hours : null,
       };
     })
     .filter((row) => row.revenue > 0 || row.labor > 0)
@@ -158,8 +175,11 @@ export default async function LaborCostPage({ searchParams }: Props) {
   const totalRevenue = rows.reduce((sum, row) => sum + row.revenue, 0);
   const totalLabor = rows.reduce((sum, row) => sum + row.labor, 0);
   const totalService = rows.reduce((sum, row) => sum + row.service, 0);
+  const totalHours = rows.reduce((sum, row) => sum + row.hours, 0);
   const totalLaborCost =
     totalRevenue > 0 ? (totalLabor / totalRevenue) * 100 : null;
+  const totalSplh =
+    totalRevenue > 0 && totalHours > 0 ? totalRevenue / totalHours : null;
 
   const componentRows = Array.from(laborByComponent.entries())
     .filter(([, amount]) => Math.abs(amount) > 0.005)
@@ -237,6 +257,15 @@ export default async function LaborCostPage({ searchParams }: Props) {
             <small>начисления без покупок и серв. сбора</small>
           </article>
           <article className="metric-card">
+            <span>SPLH</span>
+            <strong className="metric-money">
+              {totalSplh === null ? "—" : formatMoneyWhole(totalSplh)}
+            </strong>
+            <small>
+              выручка на человеко-час · {Math.round(totalHours)} ч за период
+            </small>
+          </article>
+          <article className="metric-card">
             <span>Сервисный сбор</span>
             <strong className="metric-money">
               {formatMoneyWhole(totalService)}
@@ -262,6 +291,8 @@ export default async function LaborCostPage({ searchParams }: Props) {
                   <th className="numeric">Выручка, ₽</th>
                   <th className="numeric">ФОТ, ₽</th>
                   <th className="numeric">Лейбор-кост</th>
+                  <th className="numeric">Часы</th>
+                  <th className="numeric">SPLH, ₽/ч</th>
                   <th className="numeric">Серв. сбор, ₽</th>
                 </tr>
               </thead>
@@ -275,6 +306,10 @@ export default async function LaborCostPage({ searchParams }: Props) {
                     <td className="numeric">{formatMoneyWhole(row.labor)}</td>
                     <td className="numeric">
                       <strong>{percent(row.laborCost)}</strong>
+                    </td>
+                    <td className="numeric">{Math.round(row.hours)}</td>
+                    <td className="numeric">
+                      {row.splh === null ? "—" : formatMoneyWhole(row.splh)}
                     </td>
                     <td className="numeric">{formatMoneyWhole(row.service)}</td>
                   </tr>
@@ -293,6 +328,14 @@ export default async function LaborCostPage({ searchParams }: Props) {
                   </td>
                   <td className="numeric">
                     <strong>{percent(totalLaborCost)}</strong>
+                  </td>
+                  <td className="numeric">
+                    <strong>{Math.round(totalHours)}</strong>
+                  </td>
+                  <td className="numeric">
+                    <strong>
+                      {totalSplh === null ? "—" : formatMoneyWhole(totalSplh)}
+                    </strong>
                   </td>
                   <td className="numeric">
                     <strong>{formatMoneyWhole(totalService)}</strong>
