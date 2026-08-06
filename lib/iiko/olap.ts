@@ -273,6 +273,44 @@ export async function fetchServiceChargeReceipts(
     .sort((a, b) => a.date.localeCompare(b.date) || (a.orderNum ?? 0) - (b.orderNum ?? 0));
 }
 
+export type DepartmentRevenue = {
+  departmentName: string;
+  grossRevenue: number; // без скидок (DishSumInt)
+  netRevenue: number; // со скидками (DishDiscountSumInt)
+};
+
+// Выручка по ресторанам за период: без скидок и со скидками,
+// удалённые и сторнированные заказы исключены.
+export async function fetchRevenueByDepartment(
+  from: string,
+  to: string,
+): Promise<DepartmentRevenue[]> {
+  const rows = await runAndParse({
+    reportType: "SALES",
+    buildSummary: "false",
+    groupByRowFields: ["Department"],
+    aggregateFields: ["DishSumInt", "DishDiscountSumInt"],
+    filters: {
+      ...dateFilter("OpenDate.Typed", from, to),
+      OrderDeleted: { filterType: "IncludeValues", values: ["NOT_DELETED"] },
+      DeletedWithWriteoff: {
+        filterType: "IncludeValues",
+        values: ["NOT_DELETED"],
+      },
+      Storned: { filterType: "IncludeValues", values: ["FALSE"] },
+    },
+  });
+
+  return rows
+    .map((row) => ({
+      departmentName: String(row["Department"] ?? "").trim(),
+      grossRevenue: Math.round(Number(row["DishSumInt"] ?? 0) * 100) / 100,
+      netRevenue:
+        Math.round(Number(row["DishDiscountSumInt"] ?? 0) * 100) / 100,
+    }))
+    .filter((row) => row.departmentName);
+}
+
 // Личные продажи по официантам с разбивкой по ресторану и дню
 // (день нужен, чтобы отделять барные смены от зальных по графику).
 export async function fetchSalesByWaiter(
