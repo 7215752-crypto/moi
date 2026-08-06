@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { AnalyticsNav } from "@/components/analytics-nav";
+import { AnalyticsRefreshButton } from "@/components/analytics-refresh-button";
 import { requireUser } from "@/lib/auth";
 import { formatDate, formatMoneyWhole, humanizeComponent } from "@/lib/format";
 
@@ -225,14 +226,19 @@ export default async function LaborCostPage({ searchParams }: Props) {
                 Показать
               </button>
             </form>
+            <AnalyticsRefreshButton
+              from={period.date_from}
+              to={period.date_to}
+            />
           </div>
         </section>
 
         {!hasRevenue && (
           <div className="notice warn">
-            За этот период нет данных о выручке. Откройте{" "}
-            <Link href="/analytics">Товарную аналитику</Link> и нажмите
-            «Обновить из iiko» за эти даты — тогда лейбор-кост посчитается.
+            За этот период нет данных о выручке — нажмите «Обновить из iiko»
+            (кнопка выше): портал заберёт продажи за{" "}
+            {formatDate(period.date_from)} — {formatDate(period.date_to)}, и
+            лейбор-кост с SPLH посчитаются.
           </div>
         )}
 
