@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
+import { AnalyticsNav } from "@/components/analytics-nav";
 import { AnalyticsRefreshButton } from "@/components/analytics-refresh-button";
 import { ColumnFilter } from "@/components/column-filter";
 import { requireUser } from "@/lib/auth";
@@ -338,6 +339,8 @@ export default async function AnalyticsPage({ searchParams }: Props) {
           <span>/</span>
           <strong>Товарная аналитика</strong>
         </nav>
+
+        <AnalyticsNav current="/analytics" />
 
         <section className="analytics-header">
           <div>
