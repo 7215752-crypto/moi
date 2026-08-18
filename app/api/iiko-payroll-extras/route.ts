@@ -576,7 +576,7 @@ export async function POST(request: NextRequest) {
               : "Процент от продаж (официант 4/5/6%)",
         sales_amount: row.sales_amount,
         motivation_amount: row.amount,
-        external_record_id: `olap-sales-pct:${row.employee_id}:${row.business_unit_id}`,
+        external_record_id: `olap-sales-pct:${periodId}:${row.employee_id}:${row.business_unit_id}`,
       }));
 
     // Чистим и легаси-записи olap-bonus (фиксы раньше жили в этой таблице).
@@ -616,7 +616,7 @@ export async function POST(request: NextRequest) {
         amount: row.amount,
         comment: "Фикс за блюда (iiko, счёт «Зарплата»)",
         source_system: "iiko_olap",
-        external_record_id: `olap-bonus:${row.employee_id}`,
+        external_record_id: `olap-bonus:${periodId}:${row.employee_id}`,
       }));
 
     const purchaseRows = prepared.purchases
@@ -636,7 +636,7 @@ export async function POST(request: NextRequest) {
         amount: -row.amount,
         comment: "Покупки в счёт зарплаты (iiko, «Текущие расчеты с сотрудниками»)",
         source_system: "iiko_olap",
-        external_record_id: `olap-purchase:${row.employee_id}`,
+        external_record_id: `olap-purchase:${periodId}:${row.employee_id}`,
       }));
 
     const { error: deleteAdjustmentsError } = await supabase
@@ -694,7 +694,7 @@ export async function POST(request: NextRequest) {
         description: `Сервисный сбор из чеков (${row.business_unit_name}) — к распределению менеджером`,
         amount: row.remainder,
         source_system: "iiko_olap",
-        external_record_id: `olap-service:${row.business_unit_id}`,
+        external_record_id: `olap-service:${periodId}:${row.business_unit_id}`,
       }));
 
     const { error: deleteMiscError } = await supabase

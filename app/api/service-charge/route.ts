@@ -333,7 +333,7 @@ export async function POST(request: NextRequest) {
             amount: row.amount,
             comment: "Сервисный сбор (распределение менеджера)",
             source_system: "service_split",
-            external_record_id: `service-split:${row.employee_id}`,
+            external_record_id: `service-split:${periodId}:${row.employee_id}`,
           })),
         );
       if (insertError)
@@ -364,7 +364,7 @@ export async function POST(request: NextRequest) {
           description: `Сервисный сбор (${unit.name}) — нераспределённый остаток`,
           amount: remainder,
           source_system: "iiko_olap",
-          external_record_id: `olap-service:${unitId}`,
+          external_record_id: `olap-service:${periodId}:${unitId}`,
         });
       if (insertMiscError)
         throw new Error(`Запись остатка: ${insertMiscError.message}`);
